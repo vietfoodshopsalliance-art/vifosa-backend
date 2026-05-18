@@ -44,6 +44,7 @@ await app.register(rateLimit, {
 await app.register(cors, {
   origin: (process.env.ALLOWED_ORIGINS ?? '').split(','),
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
 
 await app.register(cookie);
