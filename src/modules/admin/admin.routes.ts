@@ -1,7 +1,6 @@
 // backend/src/modules/admin/admin.routes.ts
 import { FastifyInstance } from 'fastify';
-import { requireAuth } from '../../middleware/auth.middleware.js';
-import { requireRole } from '../../middleware/requireRole.js';
+import { requireAuth, requireRole } from '../../middleware/auth.middleware.js';
 import * as userCtrl from './controllers/users.controller.js';
 import * as storeCtrl from './controllers/stores.controller.js';
 import * as settingsCtrl from './controllers/settings.controller.js';
@@ -25,8 +24,9 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/admin/stores', { preHandler: requireRole(['admin', 'mod']) }, storeCtrl.listStores);
   app.get('/admin/stores/:id', { preHandler: requireRole(['admin', 'mod']) }, storeCtrl.getStore);
   app.patch('/admin/stores/:id', { preHandler: requireRole(['admin']) }, storeCtrl.updateStore);
-  app.patch('/admin/stores/:id/transfer', { preHandler: requireRole(['admin', 'mod']) }, storeCtrl.transferStore);
+  app.post('/admin/stores/:id/transfer', { preHandler: requireRole(['admin', 'mod']) }, storeCtrl.transferStore);
   app.patch('/admin/stores/:id/override', { preHandler: requireRole(['admin']) }, storeCtrl.overrideStore);
+  app.delete('/admin/stores/:id', { preHandler: requireRole(['admin']) }, storeCtrl.deleteStore);
   app.post('/admin/stores/bulk', { preHandler: requireRole(['admin']) }, storeCtrl.bulkAction);
 
   // ─── Settings ─────────────────────────────────────────────────────────────

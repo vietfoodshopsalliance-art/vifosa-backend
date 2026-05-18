@@ -42,6 +42,7 @@ export interface IStore extends Document {
   autoCancelMinutes: number
   isAdLockedByAdmin: boolean
   isSuspended: boolean
+  isDeleted: boolean
   vipTier: 'none' | 'vip' | 'vvip' | 'vvvip'
   isOpen: boolean
   stats: {
@@ -186,6 +187,7 @@ const StoreSchema = new Schema<IStore>(
     },
     isAdLockedByAdmin: { type: Boolean, default: false },
     isSuspended: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false },
     vipTier: {
       type: String,
       enum: ['none', 'vip', 'vvip', 'vvvip'],
