@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { Store } from '../../db/stores.model.js';
-import { User } from '../../users/user.model.js';
+import { UserModel } from '../../users/user.model.js';
 
 // GET /admin/stores?search=&filter=&limit=&cursor=
 export async function listStores(req: FastifyRequest, reply: FastifyReply) {
@@ -76,7 +76,7 @@ export async function updateStore(req: FastifyRequest, reply: FastifyReply) {
 export async function transferStore(req: FastifyRequest, reply: FastifyReply) {
   const { id } = req.params as any;
   const { username } = req.body as any;
-  const newOwner = await User.findOne({ username });
+  const newOwner = await UserModel.findOne({ username });
   if (!newOwner) return reply.code(404).send({ error: 'User not found' });
   const store = await Store.findOneAndUpdate(
     { _id: id, isDeleted: { $ne: true } },
