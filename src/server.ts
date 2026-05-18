@@ -1,31 +1,108 @@
-import dotenv from 'dotenv';
-dotenv.config(); // ← Phải là dòng đầu tiên, trước mọi import khác
+// backend/src/server.ts
 
+import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { authRoutes } from './modules/auth/auth.route.js';
-import { testPushRoute } from './modules/admin/test-push.route.js';
+import cookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
+import mongoose from 'mongoose';
+import './modules/db/index.js';
+import { Server as SocketIOServer } from 'socket.io';
 
-const fastify = Fastify({ logger: true });
+import { healthRoutes } from './modules/health/health.routes.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import { usersRoutes } from './modules/users/users.routes.js';
+import { storesRoutes } from './modules/stores/stores.routes.js';
+import menuRoutes from './modules/menu/menu.routes.js';
+import './modules/db/orders.model.js';
+import { runUpdateSoldCount } from './jobs/update-sold-count.job.js';
+import { requireAuth } from './middleware/auth.middleware.js';
+import { homeRoutes } from './modules/home/home.routes.js';
+import { searchRoutes } from './modules/search/search.routes.js';
+import { cartRoutes } from './modules/orders/cart.routes.js';
+import { orderRoutes } from './modules/orders/order.routes.js';
+import { setSocketIO } from './socket/orderEvents.js';
+import { notificationsRoutes } from './modules/notifications/notifications.routes.js';
+import { notificationPrefsRoutes } from './modules/notifications/notificationPrefs.routes.js';
+import { socialRoutes } from './modules/social/social.routes.js';
+import './modules/db/social.model.js';
+import { reviewRoutes } from './modules/reviews/index.js';
+import { adminRoutes } from './modules/admin/admin.routes.js';
+import { trackingRoutes } from './modules/orders/tracking.routes.js';
+import { supportRoutes } from './modules/support/support.routes.js';
+import { initCronJobs } from './jobs/index.js';
+import { seedIndexes } from './utils/seedIndexes.js';
 
-await fastify.register(cors, {
-  origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:3000'],
+const app = Fastify({ logger: true });
+
+await app.register(rateLimit, {
+  global: true,
+  max: 100,
+  timeWindow: '1 minute',
 });
 
-fastify.get('/health', async () => ({
-  status: 'ok',
-  timestamp: new Date().toISOString(),
-}));
+await app.register(cors, {
+  origin: (process.env.ALLOWED_ORIGINS ?? '').split(','),
+  credentials: true,
+});
 
-fastify.register(authRoutes, { prefix: '/api/v1' });
-fastify.register(testPushRoute);
+await app.register(cookie);
 
-const port = Number(process.env.PORT) || 8080;
+await mongoose.connect(process.env.MONGO_URI!);
+app.log.info('MongoDB connected');
 
-try {
-  await fastify.listen({ port, host: '0.0.0.0' });
-  console.log(`Server running on port ${port}`);
-} catch (err) {
-  fastify.log.error(err);
-  process.exit(1);
+// Health check — NO /api prefix (spec 01-setup-auth) bỏ /api
+app.register(healthRoutes);
+
+app.register(authRoutes,              { prefix: '/auth' });
+app.register(usersRoutes,             { prefix: '' });
+app.register(storesRoutes,            { prefix: '' });
+app.register(menuRoutes,              { prefix: '/stores' });
+app.register(homeRoutes,              { prefix: '' });
+app.register(searchRoutes,            { prefix: '' });
+app.register(cartRoutes,              { prefix: '' });
+app.register(orderRoutes,             { prefix: '' });
+app.register(notificationsRoutes,     { prefix: '' });
+app.register(notificationPrefsRoutes, { prefix: '' });
+app.register(socialRoutes,            { prefix: '' });
+app.register(reviewRoutes,            { prefix: '' });
+app.register(adminRoutes,             { prefix: '' });
+app.register(trackingRoutes,          { prefix: '' });
+app.register(supportRoutes,           { prefix: '' });
+
+app.post('/admin/jobs/update-sold-count', { preHandler: requireAuth }, async (req, reply) => {
+  const user = (req as any).user;
+  if (!user.roles?.includes('admin')) return reply.status(403).send({ error: 'Forbidden' });
+  await runUpdateSoldCount();
+  return reply.send({ ok: true });
+});
+
+const PORT = Number(process.env.PORT ?? 8080);
+
+// Dev-only routes cho smoke test — PHẢI register TRƯỚC listen()
+if (process.env.NODE_ENV !== 'production') {
+  const { cronTriggerRoute } = await import('./modules/admin/cronTriggerRoute.js');
+  const { testSeedRoute }    = await import('./modules/admin/testSeedRoute.js');
+  app.register(cronTriggerRoute, { prefix: '/admin/cron' });
+app.register(testSeedRoute,    { prefix: '/admin/test' });
 }
+
+await app.listen({ port: PORT, host: '0.0.0.0' });
+
+// Socket.IO phải init SAU app.listen() — lúc đó app.server mới tồn tại
+const io = new SocketIOServer(app.server, {
+  cors: {
+    origin: (process.env.ALLOWED_ORIGINS ?? '').split(','),
+    credentials: true,
+  },
+});
+
+setSocketIO(io);
+
+io.on('connection', (socket) => {
+  socket.on('join:order',  (orderId: string) => socket.join(`order:${orderId}`));
+  socket.on('join:store',  (storeId: string) => socket.join(`store:${storeId}`));
+  socket.on('leave:order', (orderId: string) => socket.leave(`order:${orderId}`));
+  socket.on('join:user',   (userId: string)  => socket.join(`user:${userId}`));
+  socket.on('join:admin-notifications', () => socket.join('admin:notifications'));
+});

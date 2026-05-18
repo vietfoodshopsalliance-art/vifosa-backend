@@ -3,7 +3,6 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { verifyAccessToken } from '../utils/jwt.js';
 import type { UserRole } from '../modules/users/user.types.js';
 
-// Extend FastifyRequest để TypeScript hiểu req.user
 declare module 'fastify' {
   interface FastifyRequest {
     user?: { userId: string; roles: UserRole[] };
@@ -11,12 +10,22 @@ declare module 'fastify' {
 }
 
 export async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
+  // Mobile: Authorization: Bearer <token>
+  let token: string | undefined;
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7);
+  }
+
+  // Web: httpOnly cookie accessToken
+  if (!token) {
+    token = (req as any).cookies?.accessToken;
+  }
+
+  if (!token) {
     return reply.code(401).send({ error: 'Unauthorized', message: 'Thiếu access token' });
   }
 
-  const token = authHeader.slice(7);
   try {
     const payload = verifyAccessToken(token);
     req.user = { userId: payload.userId, roles: payload.roles as UserRole[] };
@@ -25,11 +34,10 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
   }
 }
 
-// Factory: requireRole(['admin']) hoặc requireRole(['admin', 'mod'])
 export function requireRole(allowedRoles: UserRole[]) {
   return async function (req: FastifyRequest, reply: FastifyReply) {
     await requireAuth(req, reply);
-    if (reply.sent) return; // đã 401 từ requireAuth
+    if (reply.sent) return;
 
     const userRoles = req.user?.roles ?? [];
     const hasRole = allowedRoles.some((r) => userRoles.includes(r));
@@ -38,3 +46,4 @@ export function requireRole(allowedRoles: UserRole[]) {
     }
   };
 }
+// backend/src/middleware/auth.middleware.ts
