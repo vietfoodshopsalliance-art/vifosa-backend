@@ -1,6 +1,6 @@
 import bcrypt from 'bcrypt'
 import { User } from '../db/users.model.js'
-import { Store } from '../stores/store.model.js'
+import { Store } from '../db/stores.model.js'
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/jwt.js'
 import type { RegisterInput, LoginInput } from './auth.schema.js'
 

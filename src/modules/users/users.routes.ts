@@ -163,6 +163,18 @@ fastify.post('/me/change-password', { preHandler: requireAuth }, async (request,
 });
 
 
+// POST /me/fcm-token
+fastify.post('/me/fcm-token', { preHandler: requireAuth }, async (request, reply) => {
+  const { addFcmToken } = await import('../auth/auth.controller.js');
+  return addFcmToken(request, reply);
+});
+
+// DELETE /me/fcm-token
+fastify.delete('/me/fcm-token', { preHandler: requireAuth }, async (request, reply) => {
+  const { removeFcmToken } = await import('../auth/auth.controller.js');
+  return removeFcmToken(request, reply);
+});
+
 // POST /tos/accept
 fastify.post('/tos/accept', { preHandler: requireAuth }, async (request, reply) => {
   const User = (mongoose.models['User'] as any) || mongoose.model('User');

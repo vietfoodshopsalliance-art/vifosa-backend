@@ -40,6 +40,13 @@ export async function updateRoles(req: FastifyRequest, reply: FastifyReply) {
   return reply.send(user);
 }
 
+export async function deleteUser(req: FastifyRequest, reply: FastifyReply) {
+  const { id } = req.params as any;
+  const user = await UserModel.findByIdAndDelete(id);
+  if (!user) return reply.code(404).send({ error: 'Not found' });
+  return reply.send({ ok: true });
+}
+
 export async function getUserAuditLog(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ logs: [] });
 }

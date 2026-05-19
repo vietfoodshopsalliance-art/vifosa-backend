@@ -1,9 +1,9 @@
 // backend/src/modules/admin/controllers/analytics.controller.ts
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { Order } from '../../orders/models/order.model.js';
-import { Store } from '../../stores/store.model.js';
-import { SupportTicket } from '../../support/models/supportTicket.model.js';
-import { Report } from '../../reports/models/report.model.js';
+import { Order } from '../../db/orders.model.js';
+import { Store } from '../../db/stores.model.js';
+import { SupportTicket } from '../../db/misc.model.js';
+import { Report } from '../../db/social.model.js';
 
 function periodToDays(period: string): number {
   const map: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
