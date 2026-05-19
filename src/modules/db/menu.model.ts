@@ -140,21 +140,19 @@ MenuItemSchema.index({ storeId: 1, isDeleted: 1 })
 MenuItemSchema.index({ 'soldCount.last30d': -1 })
 
 // Hook: tự động ẩn món khi tồn kho về 0
-MenuItemSchema.pre('save', function (next) {
+MenuItemSchema.pre('save', async function () {
   if (this.stock !== null && this.stock === 0 && this.status === 'active') {
     this.status = 'paused'
   }
-  next()
 })
 
-MenuItemSchema.pre('findOneAndUpdate', function (next) {
+MenuItemSchema.pre('findOneAndUpdate', async function () {
   const update = this.getUpdate() as any
   const stock = update?.$set?.stock ?? update?.stock
   if (stock === 0) {
     if (update.$set) update.$set.status = 'paused'
     else update.status = 'paused'
   }
-  next()
 })
 
 export const MenuItem: Model<IMenuItem> =

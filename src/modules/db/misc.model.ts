@@ -2,82 +2,6 @@ import mongoose, { Schema, Document, Model } from 'mongoose'
 
 // ─── Reports ─────────────────────────────────────────────────────────────────
 
-export interface IReport extends Document {
-  reporterId: mongoose.Types.ObjectId
-  targetType: 'post' | 'comment' | 'review' | 'user' | 'store' | 'order'
-  targetId: mongoose.Types.ObjectId
-  reason: 'spam' | 'misinformation' | 'harassment' | 'fraud' | 'other'
-  description: string
-  images: string[]
-  status: 'open' | 'in_review' | 'resolved' | 'rejected'
-  resolverId: mongoose.Types.ObjectId | null
-  resolution: string | null
-  createdAt: Date
-  resolvedAt: Date | null
-}
-
-const ReportSchema = new Schema<IReport>(
-  {
-    reporterId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'reporterId là bắt buộc'],
-    },
-    targetType: {
-      type: String,
-      enum: ['post', 'comment', 'review', 'user', 'store', 'order'],
-      required: [true, 'targetType là bắt buộc'],
-    },
-    targetId: {
-      type: Schema.Types.ObjectId,
-      required: [true, 'targetId là bắt buộc'],
-    },
-    reason: {
-      type: String,
-      enum: ['spam', 'misinformation', 'harassment', 'fraud', 'other'],
-      required: [true, 'Lý do báo cáo là bắt buộc'],
-    },
-    description: {
-      type: String,
-      default: '',
-      maxlength: [2000, 'Mô tả tối đa 2000 ký tự'],
-    },
-    images: {
-      type: [String],
-      default: [],
-      validate: {
-        validator: (v: string[]) => v.length <= 5,
-        message: 'Tối đa 5 ảnh bằng chứng',
-      },
-    },
-    status: {
-      type: String,
-      enum: ['open', 'in_review', 'resolved', 'rejected'],
-      default: 'open',
-    },
-    resolverId: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      default: null,
-    },
-    resolution: { type: String, default: null },
-    resolvedAt: { type: Date, default: null },
-  },
-  {
-    timestamps: { createdAt: true, updatedAt: false },
-    collection: 'reports',
-  }
-)
-
-ReportSchema.index({ status: 1, createdAt: -1 })
-ReportSchema.index({ targetType: 1, targetId: 1 })
-ReportSchema.index({ reporterId: 1 })
-
-export const Report: Model<IReport> =
-  mongoose.models.Report || mongoose.model<IReport>('Report', ReportSchema)
-
-// ─── Support Tickets ─────────────────────────────────────────────────────────
-
 export interface ISupportTicket extends Document {
   userId: mongoose.Types.ObjectId | null
   guestPhone: string | null
@@ -142,13 +66,11 @@ SupportTicketSchema.index({ status: 1, createdAt: -1 })
 SupportTicketSchema.index({ userId: 1 })
 SupportTicketSchema.index({ guestPhone: 1 })
 
-SupportTicketSchema.pre('save', function (next) {
+SupportTicketSchema.pre('save', async function () {
   if (!this.userId && !this.guestPhone) {
-    return next(new Error('Support ticket phải có userId hoặc guestPhone'))
+    throw new Error('Support ticket phải có userId hoặc guestPhone')
   }
-  next()
 })
-
 export const SupportTicket: Model<ISupportTicket> =
   mongoose.models.SupportTicket || mongoose.model<ISupportTicket>('SupportTicket', SupportTicketSchema)
 

@@ -25,3 +25,26 @@ export const DEFAULT_SETTINGS = [
   { key: 'guest_orders_enabled', value: true, description: 'Cho phép khách vãng lai đặt hàng' },
   { key: 'vip_purchase_visible', value: false, description: 'Hiện nút mua VIP cho quán' },
 ]
+
+import mongoose from 'mongoose'
+
+const SettingSchema = new mongoose.Schema({
+  key: { type: String, unique: true, required: true },
+  value: mongoose.Schema.Types.Mixed,
+  description: String,
+})
+
+const SettingModel = mongoose.models['Setting']
+  ?? mongoose.model('Setting', SettingSchema)
+
+export async function seedSettings() {
+  const ops = DEFAULT_SETTINGS.map((s) => ({
+    updateOne: {
+      filter: { key: s.key },
+      update: { $setOnInsert: s },
+      upsert: true,
+    },
+  }))
+  await SettingModel.bulkWrite(ops)
+  console.log(`[seed] Settings seeded (${ops.length} keys)`)
+}

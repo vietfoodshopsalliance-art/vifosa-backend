@@ -257,3 +257,71 @@ LikeSchema.index({ userId: 1, targetType: 1, targetId: 1 }, { unique: true })
 LikeSchema.index({ targetId: 1, targetType: 1 })
 
 export const Like: Model<ILike> = mongoose.models.Like || mongoose.model<ILike>('Like', LikeSchema)
+
+// ─── Reports ───────────────────────────────────────────────────────────────────
+
+export interface IReport extends Document {
+  reporterId: mongoose.Types.ObjectId
+  targetType: 'post' | 'comment' | 'review' | 'store' | 'user'
+  targetId: mongoose.Types.ObjectId
+  reason: 'spam' | 'fake_info' | 'harassment' | 'scam' | 'other'
+  description: string
+  images: string[]
+  status: 'open' | 'in_review' | 'resolved' | 'rejected'
+  resolverId: mongoose.Types.ObjectId | null
+  resolution: string | null
+  createdAt: Date
+  resolvedAt: Date | null
+}
+ 
+const ReportSchema = new Schema<IReport>(
+  {
+    reporterId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'reporterId là bắt buộc'],
+    },
+    targetType: {
+      type: String,
+      enum: ['post', 'comment', 'review', 'store', 'user'],
+      required: [true, 'targetType là bắt buộc'],
+    },
+    targetId: {
+      type: Schema.Types.ObjectId,
+      required: [true, 'targetId là bắt buộc'],
+    },
+    reason: {
+      type: String,
+      enum: ['spam', 'fake_info', 'harassment', 'scam', 'other'],
+      required: [true, 'reason là bắt buộc'],
+    },
+    description: { type: String, default: '', maxlength: [2000, 'Mô tả tối đa 2000 ký tự'] },
+    images: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: (v: string[]) => v.length <= 5,
+        message: 'Tối đa 5 ảnh đính kèm',
+      },
+    },
+    status: {
+      type: String,
+      enum: ['open', 'in_review', 'resolved', 'rejected'],
+      default: 'open',
+    },
+    resolverId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    resolution: { type: String, default: null },
+    resolvedAt: { type: Date, default: null },
+  },
+  {
+    timestamps: { createdAt: true, updatedAt: false },
+    collection: 'reports',
+  }
+)
+ 
+// Rule: 1 user không report cùng 1 target 2 lần
+ReportSchema.index({ reporterId: 1, targetType: 1, targetId: 1 }, { unique: true })
+ReportSchema.index({ status: 1, createdAt: -1 }) // cho admin filter
+ 
+export const Report: Model<IReport> =
+  mongoose.models.Report || mongoose.model<IReport>('Report', ReportSchema)

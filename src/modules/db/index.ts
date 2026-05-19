@@ -1,19 +1,19 @@
-/**
+/** C:\Users\Admin\develop\vifosa\backend\src\modules\db\index.ts
  * Entry point cho toàn bộ Mongoose models của Vifosa
  * Import từ đây trong toàn bộ codebase backend:
  *   import { User, Store, Order, ... } from '@/modules/db'
  */
 
-export { User } from './users.model'
-export type { IUser } from './users.model'
+export { User } from './users.model.js'
+export type { IUser } from './users.model.js'
 
-export { Store } from './stores.model'
-export type { IStore } from './stores.model'
+export { Store } from './stores.model.js'
+export type { IStore } from './stores.model.js'
 
-export { MenuCategory, MenuItem } from './menu.model'
-export type { IMenuCategory, IMenuItem } from './menu.model'
+export { MenuCategory, MenuItem } from './menu.model.js'
+export type { IMenuCategory, IMenuItem } from './menu.model.js'
 
-export { Order } from './orders.model'
+export { Order } from './orders.model.js'
 export type {
   IOrder,
   MainStatus,
@@ -21,23 +21,24 @@ export type {
   RefundStatus,
   PaymentMethod,
   DeliveryMethod,
-} from './orders.model'
+} from './orders.model.js'
 
-export { Review, Post, Comment, Like } from './social.model'
-export type { IReview, IPost, IComment, ILike } from './social.model'
+export { Review, Post, Comment, Like } from './social.model.js'
+export type { IReview, IPost, IComment, ILike } from './social.model.js'
 
-export { Report, SupportTicket, AuditLog, Setting, Notification, Address } from './misc.model'
+export { Report } from './social.model.js'
+export { SupportTicket, AuditLog, Setting, Notification, Address } from './misc.model.js'
+export type { IReport } from './social.model.js'
 export type {
-  IReport,
   ISupportTicket,
   IAuditLog,
   ISetting,
   INotification,
   NotificationType,
   IAddress,
-} from './misc.model'
+} from './misc.model.js'
 
-export { DEFAULT_SETTINGS } from './settings.seed'
+export { DEFAULT_SETTINGS } from './settings.seed.js'
 
 // ─── connectDB ────────────────────────────────────────────────────────────────
 
@@ -60,9 +61,9 @@ export async function connectDB(): Promise<void> {
 }
 
 export async function seedSettings(): Promise<void> {
-  const { Setting, DEFAULT_SETTINGS } = await import('./misc.model').then(async (m) => ({
+  const { Setting, DEFAULT_SETTINGS } = await import('./misc.model.js').then(async (m) => ({
     Setting: m.Setting,
-    DEFAULT_SETTINGS: (await import('./settings.seed')).DEFAULT_SETTINGS,
+    DEFAULT_SETTINGS: (await import('./settings.seed.js')).DEFAULT_SETTINGS,
   }))
 
   const ops = DEFAULT_SETTINGS.map((s) => ({

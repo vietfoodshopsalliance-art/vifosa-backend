@@ -51,10 +51,10 @@ export async function login(req: FastifyRequest, reply: FastifyReply) {
     const isProd = process.env.NODE_ENV === 'production';
     reply.setCookie('accessToken', result.accessToken, {
       httpOnly: true,
-      secure: isProd,
-      sameSite: isProd ? 'none' : 'lax',
+      secure: true,
+      sameSite: 'none',
       path: '/',
-      maxAge: 900,
+      maxAge: 1800,
     });
     return reply.code(200).send({ success: true, data: result });
   } catch (err) {
@@ -88,8 +88,8 @@ export async function logout(req: FastifyRequest, reply: FastifyReply) {
   reply.clearCookie('accessToken', {
     path: '/',
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure: true,
+    sameSite: 'none',
   });
   return reply.code(200).send({ success: true, message: 'Đăng xuất thành công' });
 }

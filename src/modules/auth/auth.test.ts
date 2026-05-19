@@ -12,7 +12,6 @@ const {
   loginUser,
   refreshTokens,
   logoutUser,
-  clearRefreshTokenStore,
   ConflictError,
   UnauthorizedError,
   ForbiddenError,
@@ -34,7 +33,6 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await UserModel.deleteMany({});
-  clearRefreshTokenStore();
 });
 
 const validInput = {

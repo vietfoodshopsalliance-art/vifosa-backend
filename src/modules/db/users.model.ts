@@ -23,6 +23,7 @@ export interface IUser extends Document {
     social: boolean
   }
   fcmTokens: string[]
+  refreshTokens: string[]
   tosAcceptedAt: Date | null
   tosVersion: string | null
   tosAcceptedIp: string | null
@@ -121,6 +122,10 @@ const UserSchema = new Schema<IUser>(
       type: [String],
       default: [],
     },
+    refreshTokens: {
+      type: [String],
+      default: [],
+    },
     tosAcceptedAt: {
       type: Date,
       default: null,
@@ -145,11 +150,10 @@ UserSchema.index({ roles: 1 })
 UserSchema.index({ isActive: 1 })
 
 // Validation hooks
-UserSchema.pre('save', function (next) {
+UserSchema.pre('save', async function () {
   if (this.roles.length === 0) {
-    return next(new Error('User phải có ít nhất 1 role'))
+    throw new Error('User phải có ít nhất 1 role')
   }
-  next()
 })
 
 export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema)

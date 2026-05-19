@@ -82,6 +82,8 @@ export interface IOrder extends Document {
   customerNote: string
   mainStatus: MainStatus
   isPreOrder: boolean
+  foodPhotos: string[]
+  bankTransferReceiptUrl: string | null
   refundStatus: RefundStatus | null
   refundInfo: {
     submittedAt?: Date
@@ -132,7 +134,7 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       required: [true, 'Mã đơn là bắt buộc'],
       unique: true,
-      match: [/^[A-Z]{2}\d{6}-\d{3}$/, 'Mã đơn phải có dạng AB251107-456'],
+      match: [/^[A-Z]{2}\d{4}-\d{3}$/, 'Mã đơn phải có dạng AB2511-456'],
     },
     trackingToken: {
       type: String,
@@ -231,6 +233,8 @@ const OrderSchema = new Schema<IOrder>(
       default: null,
     },
     paidAmount: { type: Number, default: 0, min: 0 },
+    foodPhotos: { type: [String], default: [] },
+    bankTransferReceiptUrl: { type: String, default: null },
     paymentStatus: {
       type: String,
       enum: ['unpaid', 'reported_paid', 'partial', 'paid_full', 'cod_pending', 'cod_collected'],
@@ -341,29 +345,21 @@ OrderSchema.index({ refundStatus: 1 })
 OrderSchema.index({ storeId: 1, mainStatus: 1, updatedAt: -1 }) // cho cron jobs
 
 // Validation hooks
-OrderSchema.pre('save', function (next) {
-  // Kiểm tra ít nhất 1 trong 2: customerId hoặc guestInfo
+OrderSchema.pre('save', async function () {
   if (!this.customerId && !this.guestInfo) {
-    return next(new Error('Đơn hàng phải có customerId hoặc guestInfo'))
+    throw new Error('Đơn hàng phải có customerId hoặc guestInfo')
   }
-
-  // Kiểm tra khoảng cách tối đa 25km (hard limit — admin có thể chỉnh qua settings nhưng validate ở service layer)
   if (this.distanceKm > 25) {
-    return next(new Error('Khoảng cách giao hàng vượt quá giới hạn 25km'))
+    throw new Error('Khoảng cách giao hàng vượt quá giới hạn 25km')
   }
-
-  // COD không được dùng cho pre-order
   if (this.isPreOrder && this.paymentMethod === 'cod') {
-    return next(new Error('Pre-order bắt buộc chuyển khoản trước, không thể dùng COD'))
+    throw new Error('Pre-order bắt buộc chuyển khoản trước, không thể dùng COD')
   }
-
-  // Tổng tiền phải khớp
   const expectedTotal = this.itemsTotal + this.shipFee
   if (Math.abs(this.totalAmount - expectedTotal) > 1) {
-    return next(new Error(`totalAmount (${this.totalAmount}) không khớp với itemsTotal + shipFee (${expectedTotal})`))
+    throw new Error(`totalAmount (${this.totalAmount}) không khớp với itemsTotal + shipFee (${expectedTotal})`)
   }
-
-  next()
 })
+
 
 export const Order: Model<IOrder> = mongoose.models.Order || mongoose.model<IOrder>('Order', OrderSchema)

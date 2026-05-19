@@ -142,9 +142,9 @@ const StoreSchema = new Schema<IStore>(
     bankAccount: {
       type: new Schema(
         {
-          number: { type: String, required: true, trim: true },
-          bank: { type: String, required: true, trim: true },
-          holder: { type: String, required: true, trim: true },
+          number: { type: String, default: "", trim: true },
+          bank: { type: String, default: "", trim: true },
+          holder: { type: String, default: "", trim: true },
           qrImage: { type: String },
         },
         { _id: false }

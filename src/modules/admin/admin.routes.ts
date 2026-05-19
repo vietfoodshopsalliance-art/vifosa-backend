@@ -7,6 +7,7 @@ import * as settingsCtrl from './controllers/settings.controller.js';
 import * as reportsCtrl from './controllers/reports.controller.js';
 import * as analyticsCtrl from './controllers/analytics.controller.js';
 import * as auditCtrl from './controllers/auditLog.controller.js';
+import * as productsCtrl from './controllers/products.controller.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   // Tất cả /admin/* đều cần auth + role admin hoặc mod (tuỳ endpoint)
@@ -18,6 +19,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.patch('/admin/users/:id/suspend', { preHandler: requireRole(['admin']) }, userCtrl.suspendUser);
   app.post('/admin/users/:id/reset-password', { preHandler: requireRole(['admin']) }, userCtrl.resetPassword);
   app.patch('/admin/users/:id/roles', { preHandler: requireRole(['admin']) }, userCtrl.updateRoles);
+  app.delete('/admin/users/:id', { preHandler: requireRole(['admin']) }, userCtrl.deleteUser);
   app.get('/admin/users/:id/audit-log', { preHandler: requireRole(['admin', 'mod']) }, userCtrl.getUserAuditLog);
 
   // ─── Stores ───────────────────────────────────────────────────────────────
@@ -28,6 +30,9 @@ export async function adminRoutes(app: FastifyInstance) {
   app.patch('/admin/stores/:id/override', { preHandler: requireRole(['admin']) }, storeCtrl.overrideStore);
   app.delete('/admin/stores/:id', { preHandler: requireRole(['admin']) }, storeCtrl.deleteStore);
   app.post('/admin/stores/bulk', { preHandler: requireRole(['admin']) }, storeCtrl.bulkAction);
+
+  // ─── Products ─────────────────────────────────────────────────────────────
+  app.get('/admin/products', { preHandler: requireRole(['admin', 'mod']) }, productsCtrl.listProducts);
 
   // ─── Settings ─────────────────────────────────────────────────────────────
   app.get('/admin/settings', { preHandler: requireRole(['admin']) }, settingsCtrl.getSettings);
