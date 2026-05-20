@@ -262,9 +262,9 @@ export const Like: Model<ILike> = mongoose.models.Like || mongoose.model<ILike>(
 
 export interface IReport extends Document {
   reporterId: mongoose.Types.ObjectId
-  targetType: 'post' | 'comment' | 'review' | 'store' | 'user'
+  targetType: 'post' | 'comment' | 'review' | 'store' | 'user' | 'order'
   targetId: mongoose.Types.ObjectId
-  reason: 'spam' | 'fake_info' | 'harassment' | 'scam' | 'other'
+  reason: 'spam' | 'misinformation' | 'harassment' | 'fraud' | 'other'
   description: string
   images: string[]
   status: 'open' | 'in_review' | 'resolved' | 'rejected'
@@ -283,7 +283,7 @@ const ReportSchema = new Schema<IReport>(
     },
     targetType: {
       type: String,
-      enum: ['post', 'comment', 'review', 'store', 'user'],
+      enum: ['post', 'comment', 'review', 'store', 'user', 'order'],
       required: [true, 'targetType là bắt buộc'],
     },
     targetId: {
@@ -292,7 +292,7 @@ const ReportSchema = new Schema<IReport>(
     },
     reason: {
       type: String,
-      enum: ['spam', 'fake_info', 'harassment', 'scam', 'other'],
+      enum: ['spam', 'misinformation', 'harassment', 'fraud', 'other'],
       required: [true, 'reason là bắt buộc'],
     },
     description: { type: String, default: '', maxlength: [2000, 'Mô tả tối đa 2000 ký tự'] },

@@ -1,52 +1,193 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { UserModel } from '../../users/user.model.js';
+import { FastifyRequest, FastifyReply } from 'fastify'
+import { UserModel } from '../../users/user.model.js'
+import { adminResetPassword as doResetPassword } from '../../auth/auth.service.js'
+import { RefreshToken } from '../../db/refresh-tokens.model.js'
+import { AuditLog } from '../../db/misc.model.js'
 
+const ALLOWED_GRANTABLE_ROLES = ['mod', 'admin'] as const
+
+// GET /admin/users
 export async function listUsers(req: FastifyRequest, reply: FastifyReply) {
-  const { search, limit = '20', cursor } = req.query as any;
-  const pageSize = Math.min(Number(limit) || 20, 100);
-  const query: Record<string, any> = {};
-  if (search) query.$or = [{ username: { $regex: search, $options: 'i' } }, { email: { $regex: search, $options: 'i' } }];
-  if (cursor) query._id = { $lt: cursor };
-  const users = await UserModel.find(query).sort({ _id: -1 }).limit(pageSize + 1).select('-passwordHash').lean();
-  const hasMore = users.length > pageSize;
-  const items = users.slice(0, pageSize);
-  return reply.send({ users: items, nextCursor: hasMore ? String(items[items.length - 1]._id) : undefined });
+  const { search, limit = '20', cursor } = req.query as any
+  const pageSize = Math.min(Number(limit) || 20, 100)
+  const query: Record<string, any> = {}
+  if (search) {
+    query.$or = [
+      { username: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+      { nickname: { $regex: search, $options: 'i' } },
+    ]
+  }
+  if (cursor) query._id = { $lt: cursor }
+  const users = await UserModel.find(query)
+    .sort({ _id: -1 })
+    .limit(pageSize + 1)
+    .select('-passwordHash -fcmTokens')
+    .lean()
+  const hasMore = users.length > pageSize
+  const items = users.slice(0, pageSize)
+  return reply.send({ users: items, nextCursor: hasMore ? String(items[items.length - 1]._id) : undefined })
 }
 
+// GET /admin/users/:userId
 export async function getUser(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as any;
-  const user = await UserModel.findById(id).select('-passwordHash').lean();
-  if (!user) return reply.code(404).send({ error: 'Not found' });
-  return reply.send(user);
+  const { userId } = req.params as any
+  const user = await UserModel.findById(userId).select('-passwordHash -fcmTokens').lean()
+  if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+  return reply.send({ user })
 }
 
-export async function suspendUser(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as any;
-  const { suspended } = req.body as any;
-  const user = await UserModel.findByIdAndUpdate(id, { $set: { isActive: !suspended } }, { new: true }).select('-passwordHash');
-  if (!user) return reply.code(404).send({ error: 'Not found' });
-  return reply.send(user);
+// PUT /admin/users/:userId/status  — khoá hoặc mở tài khoản
+export async function updateStatus(req: FastifyRequest, reply: FastifyReply) {
+  const { userId } = req.params as any
+  const { isActive } = req.body as any
+
+  if (typeof isActive !== 'boolean') {
+    return reply.code(400).send({ error: 'VALIDATION_ERROR', message: 'isActive phải là boolean' })
+  }
+
+  const user = await UserModel.findByIdAndUpdate(
+    userId,
+    { $set: { isActive } },
+    { new: true },
+  ).select('-passwordHash -fcmTokens')
+
+  if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+
+  // Khi khoá: force logout toàn bộ thiết bị
+  if (!isActive) {
+    await RefreshToken.deleteMany({ userId })
+  }
+
+  await AuditLog.create({
+    actorId: (req as any).user.userId,
+    actorRole: 'admin',
+    action: isActive ? 'user.unsuspend' : 'user.suspend',
+    targetType: 'user',
+    targetId: userId,
+    ip: req.ip,
+    userAgent: req.headers['user-agent'] ?? '',
+  })
+
+  return reply.send({ success: true, user })
 }
 
+// POST /admin/users/:userId/roles  — thêm role (chỉ mod hoặc admin)
+export async function addRole(req: FastifyRequest, reply: FastifyReply) {
+  const { userId } = req.params as any
+  const { role } = req.body as any
+
+  if (!ALLOWED_GRANTABLE_ROLES.includes(role)) {
+    return reply.code(400).send({
+      error: 'VALIDATION_ERROR',
+      message: `Chỉ có thể gán role: ${ALLOWED_GRANTABLE_ROLES.join(', ')}`,
+    })
+  }
+
+  const user = await UserModel.findByIdAndUpdate(
+    userId,
+    { $addToSet: { roles: role } },
+    { new: true },
+  ).select('-passwordHash -fcmTokens')
+
+  if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+
+  await AuditLog.create({
+    actorId: (req as any).user.userId,
+    actorRole: 'admin',
+    action: 'role.grant',
+    targetType: 'user',
+    targetId: userId,
+    after: { role },
+    ip: req.ip,
+    userAgent: req.headers['user-agent'] ?? '',
+  })
+
+  return reply.send({ success: true, user })
+}
+
+// DELETE /admin/users/:userId/roles/:role  — xoá role khỏi user
+export async function removeRole(req: FastifyRequest, reply: FastifyReply) {
+  const { userId, role } = req.params as any
+
+  if (!ALLOWED_GRANTABLE_ROLES.includes(role)) {
+    return reply.code(400).send({
+      error: 'VALIDATION_ERROR',
+      message: `Chỉ có thể xoá role: ${ALLOWED_GRANTABLE_ROLES.join(', ')}`,
+    })
+  }
+
+  const user = await UserModel.findByIdAndUpdate(
+    userId,
+    { $pull: { roles: role } },
+    { new: true },
+  ).select('-passwordHash -fcmTokens')
+
+  if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+
+  await AuditLog.create({
+    actorId: (req as any).user.userId,
+    actorRole: 'admin',
+    action: 'role.revoke',
+    targetType: 'user',
+    targetId: userId,
+    before: { role },
+    ip: req.ip,
+    userAgent: req.headers['user-agent'] ?? '',
+  })
+
+  return reply.send({ success: true, user })
+}
+
+// POST /admin/users/:userId/reset-password
 export async function resetPassword(req: FastifyRequest, reply: FastifyReply) {
-  return reply.code(501).send({ error: 'Not implemented' });
+  const { userId } = req.params as any
+  try {
+    const newPassword = await doResetPassword(userId)
+    await AuditLog.create({
+      actorId: (req as any).user.userId,
+      actorRole: 'admin',
+      action: 'user.reset_password',
+      targetType: 'user',
+      targetId: userId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? '',
+    })
+    return reply.send({ success: true, data: { newPassword } })
+  } catch (err: any) {
+    return reply.code(404).send({ error: 'USER_NOT_FOUND', message: err.message })
+  }
 }
 
-export async function updateRoles(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as any;
-  const { roles } = req.body as any;
-  const user = await UserModel.findByIdAndUpdate(id, { $set: { roles } }, { new: true }).select('-passwordHash');
-  if (!user) return reply.code(404).send({ error: 'Not found' });
-  return reply.send(user);
+// POST /admin/users/:userId/logout-all
+export async function adminLogoutAll(req: FastifyRequest, reply: FastifyReply) {
+  const { userId } = req.params as any
+  const deleted = await RefreshToken.deleteMany({ userId })
+  if (deleted.deletedCount === 0 && !(await UserModel.exists({ _id: userId }))) {
+    return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+  }
+  return reply.send({ success: true, message: 'Đã đăng xuất toàn bộ thiết bị' })
 }
 
+// DELETE /admin/users/:userId  — soft delete
 export async function deleteUser(req: FastifyRequest, reply: FastifyReply) {
-  const { id } = req.params as any;
-  const user = await UserModel.findByIdAndDelete(id);
-  if (!user) return reply.code(404).send({ error: 'Not found' });
-  return reply.send({ ok: true });
+  const { userId } = req.params as any
+  const user = await UserModel.findByIdAndUpdate(
+    userId,
+    { $set: { isActive: false, username: `deleted_${userId}`, email: `deleted_${userId}@void.local` } },
+    { new: true },
+  )
+  if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+  await RefreshToken.deleteMany({ userId })
+  return reply.send({ success: true })
 }
 
+// GET /admin/users/:userId/audit-log
 export async function getUserAuditLog(req: FastifyRequest, reply: FastifyReply) {
-  return reply.send({ logs: [] });
+  const { userId } = req.params as any
+  const logs = await AuditLog.find({ targetType: 'user', targetId: userId })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean()
+  return reply.send({ logs })
 }

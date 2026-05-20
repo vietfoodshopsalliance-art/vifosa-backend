@@ -4,6 +4,7 @@ export interface IStore extends Document {
   ownerId: mongoose.Types.ObjectId
   name: string
   description: string
+  phone?: string
   coverImage: string | null
   avatarImage: string | null
   address: {
@@ -19,6 +20,7 @@ export interface IStore extends Document {
     close: string
     isClosed: boolean
   }[]
+  isOpen: boolean
   emergencyClosed: boolean
   bankAccount: {
     number: string
@@ -30,8 +32,6 @@ export interface IStore extends Document {
     bankTransfer: boolean
     cod: boolean
     fiftyFifty: boolean
-    momo: boolean
-    zaloPay: boolean
   }
   shipFeeFormula: {
     a: number
@@ -42,9 +42,9 @@ export interface IStore extends Document {
   autoCancelMinutes: number
   isAdLockedByAdmin: boolean
   isSuspended: boolean
-  isDeleted: boolean
   vipTier: 'none' | 'vip' | 'vvip' | 'vvvip'
-  isOpen: boolean
+  vipExpiresAt: Date | null
+  vipAutoRenew: boolean
   stats: {
     completedOrdersThisMonth: number
     avgRating: number
@@ -108,6 +108,12 @@ const StoreSchema = new Schema<IStore>(
       default: '',
       maxlength: [1000, 'Mô tả tối đa 1000 ký tự'],
     },
+    phone: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: [20, 'SĐT tối đa 20 ký tự'],
+    },
     coverImage: { type: String, default: null },
     avatarImage: { type: String, default: null },
     address: {
@@ -138,6 +144,7 @@ const StoreSchema = new Schema<IStore>(
           isClosed: d === 0, // Chủ nhật đóng mặc định
         })),
     },
+    isOpen: { type: Boolean, default: false },
     emergencyClosed: { type: Boolean, default: false },
     bankAccount: {
       type: new Schema(
@@ -157,12 +164,10 @@ const StoreSchema = new Schema<IStore>(
           bankTransfer: { type: Boolean, default: true },
           cod: { type: Boolean, default: false },
           fiftyFifty: { type: Boolean, default: false },
-          momo: { type: Boolean, default: false },
-          zaloPay: { type: Boolean, default: false },
         },
         { _id: false }
       ),
-      default: () => ({ bankTransfer: true, cod: false, fiftyFifty: false, momo: false, zaloPay: false }),
+      default: () => ({ bankTransfer: true, cod: false, fiftyFifty: false }),
     },
     shipFeeFormula: {
       type: new Schema(
@@ -187,13 +192,13 @@ const StoreSchema = new Schema<IStore>(
     },
     isAdLockedByAdmin: { type: Boolean, default: false },
     isSuspended: { type: Boolean, default: false },
-    isDeleted: { type: Boolean, default: false },
     vipTier: {
       type: String,
       enum: ['none', 'vip', 'vvip', 'vvvip'],
       default: 'none',
     },
-    isOpen: { type: Boolean, default: false },
+    vipExpiresAt: { type: Date, default: null },
+    vipAutoRenew: { type: Boolean, default: false },
     stats: {
       type: new Schema(
         {
@@ -216,8 +221,6 @@ const StoreSchema = new Schema<IStore>(
 StoreSchema.index({ 'address.location': '2dsphere' })
 StoreSchema.index({ ownerId: 1 })
 StoreSchema.index({ vipTier: 1 })
-StoreSchema.index({ isSuspended: 1, isOpen: 1 })
-StoreSchema.index({ emergencyClosed: 1 })
-StoreSchema.index({ createdAt: -1 })
+StoreSchema.index({ vipExpiresAt: 1 })
 
 export const Store: Model<IStore> = mongoose.models.Store || mongoose.model<IStore>('Store', StoreSchema)

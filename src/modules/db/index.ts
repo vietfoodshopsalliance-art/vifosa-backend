@@ -40,6 +40,12 @@ export type {
 
 export { DEFAULT_SETTINGS } from './settings.seed.js'
 
+export { RefreshToken } from './refresh-tokens.model.js'
+export type { IRefreshToken } from './refresh-tokens.model.js'
+
+export { StoreMembership } from './store-memberships.model.js'
+export type { IStoreMembership, MemberRole, MemberStatus, ManagerPermission } from './store-memberships.model.js'
+
 // ─── connectDB ────────────────────────────────────────────────────────────────
 
 import mongoose from 'mongoose'

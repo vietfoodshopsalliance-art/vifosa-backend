@@ -1,14 +1,15 @@
 import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 
+// Access token payload — chỉ chứa sub (userId). Roles được lấy fresh từ DB trong requireAuth.
 export interface JwtAccessPayload {
-  userId: string
-  roles: string[]
+  sub: string
 }
 
+// Refresh token payload — sub + jti (UUID) để lookup O(1) trong refresh_tokens collection.
 export interface JwtRefreshPayload {
-  userId: string
-  tokenVersion?: number
+  sub: string
+  jti: string
 }
 
 function accessSecret() {
@@ -26,16 +27,18 @@ function refreshSecret() {
 const ACCESS_EXPIRES = () => process.env.JWT_ACCESS_EXPIRES ?? '15m'
 const REFRESH_EXPIRES = () => process.env.JWT_REFRESH_EXPIRES ?? '30d'
 
-export function signAccessToken(payload: JwtAccessPayload): string {
-  return jwt.sign(payload, accessSecret(), { expiresIn: ACCESS_EXPIRES() } as jwt.SignOptions)
+export function signAccessToken(userId: string): string {
+  return jwt.sign({ sub: userId }, accessSecret(), {
+    expiresIn: ACCESS_EXPIRES(),
+  } as jwt.SignOptions)
 }
 
-export function signRefreshToken(payload: JwtRefreshPayload): string {
-  return jwt.sign(
-    { ...payload, jti: crypto.randomUUID() },
-    refreshSecret(),
-    { expiresIn: REFRESH_EXPIRES() } as jwt.SignOptions,
-  )
+export function signRefreshToken(userId: string): { token: string; jti: string } {
+  const jti = crypto.randomUUID()
+  const token = jwt.sign({ sub: userId, jti }, refreshSecret(), {
+    expiresIn: REFRESH_EXPIRES(),
+  } as jwt.SignOptions)
+  return { token, jti }
 }
 
 export function verifyAccessToken(token: string): JwtAccessPayload {

@@ -191,6 +191,9 @@ export type NotificationType =
   | 'account_critical'
   | 'moderation'
   | 'system'
+  | 'store_invitation'
+  | 'vip_status'
+  | 'vip_reminder'
 
 export interface INotification extends Document {
   userId: mongoose.Types.ObjectId
@@ -229,6 +232,9 @@ const NotificationSchema = new Schema<INotification>(
         'account_critical',
         'moderation',
         'system',
+        'store_invitation',
+        'vip_status',
+        'vip_reminder',
       ],
       required: [true, 'type là bắt buộc'],
     },

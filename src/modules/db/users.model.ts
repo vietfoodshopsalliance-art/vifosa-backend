@@ -16,6 +16,8 @@ export interface IUser extends Document {
     bank: string
     holder: string
   } | null
+  followers: mongoose.Types.ObjectId[]    // Phase 2
+  following: mongoose.Types.ObjectId[]    // Phase 2
   blockedUsers: mongoose.Types.ObjectId[]
   notificationPrefs: {
     orderUpdates: boolean
@@ -23,7 +25,6 @@ export interface IUser extends Document {
     social: boolean
   }
   fcmTokens: string[]
-  refreshTokens: string[]
   tosAcceptedAt: Date | null
   tosVersion: string | null
   tosAcceptedIp: string | null
@@ -102,6 +103,16 @@ const UserSchema = new Schema<IUser>(
       ),
       default: null,
     },
+    followers: {
+      type: [Schema.Types.ObjectId],
+      ref: 'User',
+      default: [],
+    },
+    following: {
+      type: [Schema.Types.ObjectId],
+      ref: 'User',
+      default: [],
+    },
     blockedUsers: {
       type: [Schema.Types.ObjectId],
       ref: 'User',
@@ -119,10 +130,6 @@ const UserSchema = new Schema<IUser>(
       default: () => ({ orderUpdates: true, promotions: false, social: true }),
     },
     fcmTokens: {
-      type: [String],
-      default: [],
-    },
-    refreshTokens: {
       type: [String],
       default: [],
     },

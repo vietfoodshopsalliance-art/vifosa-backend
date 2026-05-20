@@ -18,6 +18,7 @@ const {
 } = await import('./auth.service.js');
 
 const { UserModel } = await import('../users/user.model.js');
+const { RefreshToken } = await import('../db/refresh-tokens.model.js');
 
 let mongod: MongoMemoryServer;
 
@@ -33,6 +34,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await UserModel.deleteMany({});
+  await RefreshToken.deleteMany({});
 });
 
 const validInput = {
@@ -229,7 +231,7 @@ describe('logoutUser', () => {
     // Access token la stateless, van verify duoc cho den khi het han
     const { verifyAccessToken } = await import('../../utils/jwt.js');
     const payload = verifyAccessToken(accessToken);
-    expect(payload.userId).toBeTruthy();
+    expect(payload.sub).toBeTruthy();
   });
 });
 

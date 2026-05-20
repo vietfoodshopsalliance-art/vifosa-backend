@@ -1,3 +1,6 @@
-import { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
+import { homeFeedHandler } from './home.controller.js';
 
-export async function homeRoutes(_app: FastifyInstance) {}
+export async function homeRoutes(app: FastifyInstance) {
+  app.get('/home-feed', homeFeedHandler);
+}

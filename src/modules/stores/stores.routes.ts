@@ -13,7 +13,7 @@ export async function storesRoutes(app: FastifyInstance) {
       reply.code(400).send({ error: 'storeId không hợp lệ' })
       return null
     }
-    const store = await Store.findOne({ _id: storeId, isDeleted: false })
+    const store = await Store.findOne({ _id: storeId, isDeleted: { $ne: true } })
     if (!store) {
       reply.code(404).send({ error: 'Không tìm thấy quán' })
       return null
@@ -28,8 +28,38 @@ export async function storesRoutes(app: FastifyInstance) {
   // ── GET /me/stores ────────────────────────────────────────────────────────
   app.get('/me/stores', { preHandler: requireAuth }, async (req, reply) => {
     const userId = req.user!.userId
-    const stores = await Store.find({ ownerId: userId, isDeleted: false }).sort({ createdAt: -1 })
+    const stores = await Store.find({ ownerId: userId, isDeleted: { $ne: true } }).sort({ createdAt: -1 })
     return reply.send(stores)
+  })
+
+  // ── POST /me/stores ───────────────────────────────────────────────────────
+  app.post<{ Body: any }>('/me/stores', { preHandler: requireAuth }, async (req, reply) => {
+    const userId = req.user!.userId
+    const body = req.body as Record<string, any>
+
+    if (!body.name || typeof body.name !== 'string' || body.name.trim().length < 2) {
+      return reply.code(400).send({ error: 'Tên quán tối thiểu 2 ký tự' })
+    }
+    if (!body.address?.text || !body.address?.location?.coordinates) {
+      return reply.code(400).send({ error: 'Địa chỉ và toạ độ là bắt buộc' })
+    }
+
+    const store = new Store({
+      ownerId: userId,
+      name: body.name.trim(),
+      description: body.description ?? '',
+      phone: body.phone ?? '',
+      address: body.address,
+      openingHours: body.openingHours,
+      bankAccount: body.bankAccount ?? null,
+      paymentMethods: body.paymentMethods,
+      shipFeeFormula: body.shipFeeFormula,
+      autoCancelMinutes: body.autoCancelMinutes ?? 15,
+      autoConfirmMinutes: body.autoConfirmMinutes ?? 0,
+    })
+
+    await store.save()
+    return reply.code(201).send(store)
   })
 
   // ── GET /me/stores/:storeId ───────────────────────────────────────────────
@@ -52,8 +82,9 @@ export async function storesRoutes(app: FastifyInstance) {
       if (!store) return
 
       const allowed = [
-        'name', 'description', 'coverImage', 'avatarImage',
-        'openingHours', 'bankAccount', 'paymentMethods',
+        'name', 'description', 'phone',
+        'coverImage', 'avatarImage',
+        'address', 'openingHours', 'bankAccount', 'paymentMethods',
         'shipFeeFormula', 'autoConfirmMinutes', 'autoCancelMinutes',
       ]
       const body = req.body as Record<string, unknown>
@@ -62,6 +93,23 @@ export async function storesRoutes(app: FastifyInstance) {
       }
       await store.save()
       return reply.send(store)
+    }
+  )
+
+  // ── PATCH /me/stores/:storeId/open ───────────────────────────────────────
+  app.patch<{ Params: { storeId: string }; Body: { open?: boolean } }>(
+    '/me/stores/:storeId/open',
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const store = await assertOwner(req.params.storeId, req.user!.userId, reply)
+      if (!store) return
+
+      store.isOpen = typeof req.body.open === 'boolean'
+        ? req.body.open
+        : !store.isOpen
+
+      await store.save()
+      return reply.send({ isOpen: store.isOpen })
     }
   )
 

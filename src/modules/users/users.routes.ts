@@ -1,4 +1,5 @@
-import { Address } from '../db';
+import type { FastifyInstance } from 'fastify';
+import { Address } from '../db/index.js';
 import { requireAuth } from '../../middleware/auth.middleware.js';
 import mongoose from 'mongoose';
 
@@ -20,7 +21,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
     if (body.avatar !== undefined) allowed.avatar = body.avatar;
 
     const updated = await User.findByIdAndUpdate(userId, { $set: allowed }, { new: true }).select(
-      '-password -refreshTokens'
+      '-passwordHash -fcmTokens'
     );
     return reply.send({ user: updated });
   });
@@ -37,7 +38,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
       userId,
       { $set: { avatar: avatarUrl } },
       { new: true }
-    ).select('-password -refreshTokens');
+    ).select('-passwordHash -fcmTokens');
     return reply.send({ user: updated });
   });
 
@@ -141,25 +142,10 @@ fastify.get('/me', { preHandler: requireAuth }, async (request, reply) => {
 });
 
 
-// POST /me/change-password
+// POST /me/change-password  (alias cho PUT /me/password theo spec)
 fastify.post('/me/change-password', { preHandler: requireAuth }, async (request, reply) => {
-  const bcrypt = (await import('bcrypt')).default;
-  const User = (mongoose.models['User'] as any) || mongoose.model('User');
-  const u = (request as any).user;
-  const userId = u.userId ?? u._id;
-  const { oldPassword, newPassword } = request.body as any;
-  if (!oldPassword || !newPassword) return reply.status(400).send({ error: 'Thiếu oldPassword hoặc newPassword' });
-  if (newPassword.length < 8) return reply.status(400).send({ error: 'newPassword phải ít nhất 8 ký tự' });
-  const user = await User.findById(userId);
-  if (!user) return reply.status(404).send({ error: 'User not found' });
-  const valid = await bcrypt.compare(oldPassword, (user as any).passwordHash);
-  if (!valid) return reply.status(401).send({ error: 'Mật khẩu hiện tại không đúng' });
-  const hash = await bcrypt.hash(newPassword, 12);
-  await User.findByIdAndUpdate(userId, { passwordHash: hash });
-  // Force logout tất cả thiết bị — xoá in-memory store
-  const { clearAllRefreshTokens } = await import('../auth/auth.service.js');
-  clearAllRefreshTokens(userId.toString());
-  return reply.send({ success: true, message: 'Đổi mật khẩu thành công' });
+  const { changePassword } = await import('../auth/auth.controller.js');
+  return changePassword(request, reply);
 });
 
 

@@ -29,7 +29,8 @@ import './modules/db/social.model.js';
 import { reviewRoutes } from './modules/reviews/index.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { trackingRoutes } from './modules/orders/tracking.routes.js';
-import { supportRoutes } from './modules/support/support.routes.js';
+import { supportRoutes } from './modules/support/support.routes.js'
+import { storeMembershipRoutes } from './modules/stores/store-membership.routes.js';
 import { initCronJobs } from './jobs/index.js';
 import { seedIndexes } from './utils/seedIndexes.js';
 
@@ -69,7 +70,8 @@ app.register(socialRoutes,            { prefix: '' });
 app.register(reviewRoutes,            { prefix: '' });
 app.register(adminRoutes,             { prefix: '' });
 app.register(trackingRoutes,          { prefix: '' });
-app.register(supportRoutes,           { prefix: '' });
+app.register(supportRoutes,            { prefix: '' })
+app.register(storeMembershipRoutes,   { prefix: '' })
 
 app.post('/admin/jobs/update-sold-count', { preHandler: requireAuth }, async (req, reply) => {
   const user = (req as any).user;

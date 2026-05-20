@@ -11,6 +11,8 @@ export type MainStatus =
   | 'delivered'
   | 'completed'
   | 'cancelled'
+  | 'gifted'
+  | 'voided'
 
 export type PaymentStatus =
   | 'unpaid'
@@ -22,7 +24,7 @@ export type PaymentStatus =
 
 export type RefundStatus = 'required' | 'submitted' | 'refunded' | 'disputed'
 
-export type PaymentMethod = 'bank_transfer' | 'cod' | 'fifty_fifty' | 'momo' | 'zalo_pay'
+export type PaymentMethod = 'bank_transfer' | 'cod' | 'fifty_fifty'
 
 export type DeliveryMethod = 'store_delivery' | 'self_pickup' | 'customer_shipper'
 
@@ -84,6 +86,13 @@ export interface IOrder extends Document {
   isPreOrder: boolean
   foodPhotos: string[]
   bankTransferReceiptUrl: string | null
+  internalOrderType: 'gift' | 'void' | null
+  internalOrderInfo: {
+    recipientName?: string
+    reason: string
+    note?: string
+    attachments?: string[]
+  } | null
   refundStatus: RefundStatus | null
   refundInfo: {
     submittedAt?: Date
@@ -134,7 +143,7 @@ const OrderSchema = new Schema<IOrder>(
       type: String,
       required: [true, 'Mã đơn là bắt buộc'],
       unique: true,
-      match: [/^[A-Z]{2}\d{4}-\d{3}$/, 'Mã đơn phải có dạng AB2511-456'],
+      match: [/^[A-Z]{2}\d{6}-\d{3}$/, 'Mã đơn phải có dạng AB251107-456'],
     },
     trackingToken: {
       type: String,
@@ -218,7 +227,7 @@ const OrderSchema = new Schema<IOrder>(
     totalAmount: { type: Number, required: true, min: 0 },
     paymentMethod: {
       type: String,
-      enum: ['bank_transfer', 'cod', 'fifty_fifty', 'momo', 'zalo_pay'],
+      enum: ['bank_transfer', 'cod', 'fifty_fifty'],
       required: [true, 'Phương thức thanh toán là bắt buộc'],
     },
     storeBankSnapshot: {
@@ -270,10 +279,29 @@ const OrderSchema = new Schema<IOrder>(
         'delivered',
         'completed',
         'cancelled',
+        'gifted',
+        'voided',
       ],
       default: 'created',
     },
     isPreOrder: { type: Boolean, default: false },
+    internalOrderType: {
+      type: String,
+      enum: ['gift', 'void'],
+      default: null,
+    },
+    internalOrderInfo: {
+      type: new Schema(
+        {
+          recipientName: { type: String },
+          reason: { type: String, required: true },
+          note: { type: String },
+          attachments: { type: [String], default: [] },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
     refundStatus: {
       type: String,
       enum: ['required', 'submitted', 'refunded', 'disputed'],
@@ -343,6 +371,7 @@ OrderSchema.index({ 'guestInfo.phone': 1 })
 OrderSchema.index({ isPreOrder: 1, mainStatus: 1 })
 OrderSchema.index({ refundStatus: 1 })
 OrderSchema.index({ storeId: 1, mainStatus: 1, updatedAt: -1 }) // cho cron jobs
+OrderSchema.index({ 'items.itemId': 1, mainStatus: 1, createdAt: -1 }) // cho sold count lookup
 
 // Validation hooks
 OrderSchema.pre('save', async function () {
