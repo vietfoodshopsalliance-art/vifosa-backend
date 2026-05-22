@@ -93,6 +93,7 @@ const io = new SocketIOServer(app.server, {
 });
 
 setSocketIO(io);
+await initCronJobs();
 
 io.on('connection', (socket) => {
   socket.on('join:order',  (orderId: string) => socket.join(`order:${orderId}`));
