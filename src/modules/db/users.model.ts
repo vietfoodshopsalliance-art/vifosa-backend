@@ -1,16 +1,24 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
 
+export type UserRole = 'customer' | 'store_owner' | 'mod' | 'admin' | 'shipper'
+
+export interface AuthPayload {
+  userId: string
+  roles: UserRole[]
+}
+
 export interface IUser extends Document {
   username: string
   nickname: string
   email: string
   phone: string
   passwordHash: string
-  roles: ('customer' | 'store_owner' | 'mod' | 'admin' | 'shipper')[]
+  roles: UserRole[]
   avatar: string | null
   isActive: boolean
   isSuspicious: boolean
   badReportCounter: number
+  defaultPaymentMethod: 'bankTransfer' | 'cod' | 'fiftyFifty' | 'momo' | 'zaloPay' | null
   bankAccountForRefund: {
     number: string
     bank: string
@@ -77,6 +85,11 @@ const UserSchema = new Schema<IUser>(
     },
     avatar: {
       type: String,
+      default: null,
+    },
+    defaultPaymentMethod: {
+      type: String,
+      enum: ['bankTransfer', 'cod', 'fiftyFifty', 'momo', 'zaloPay', null],
       default: null,
     },
     isActive: {

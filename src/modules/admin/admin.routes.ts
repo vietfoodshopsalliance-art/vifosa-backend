@@ -1,6 +1,7 @@
 // backend/src/modules/admin/admin.routes.ts
 import { FastifyInstance } from 'fastify'
 import { requireAuth, requireRole } from '../../middleware/auth.middleware.js'
+import { runUpdateSoldCount } from '../../jobs/update-sold-count.job.js'
 import * as userCtrl from './controllers/users.controller.js'
 import * as storeCtrl from './controllers/stores.controller.js'
 import * as settingsCtrl from './controllers/settings.controller.js'
@@ -60,4 +61,10 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/admin/analytics/top-items',         { preHandler: requireRole(['admin']) }, analyticsCtrl.topItems)
   app.get('/admin/analytics/cancellation-rate', { preHandler: requireRole(['admin']) }, analyticsCtrl.cancellationRate)
   app.get('/admin/dashboard-stats',             { preHandler: requireRole(['admin', 'mod']) }, analyticsCtrl.dashboardStats)
+
+  // ─── Jobs ─────────────────────────────────────────────────────────────────
+  app.post('/admin/jobs/update-sold-count', { preHandler: requireRole(['admin']) }, async (_req, reply) => {
+    await runUpdateSoldCount()
+    return reply.send({ ok: true })
+  })
 }

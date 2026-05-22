@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
-import { UserModel } from '../../users/user.model.js'
+import { User as UserModel } from '../../db/users.model.js'
 import { adminResetPassword as doResetPassword } from '../../auth/auth.service.js'
 import { RefreshToken } from '../../db/refresh-tokens.model.js'
 import { AuditLog } from '../../db/misc.model.js'

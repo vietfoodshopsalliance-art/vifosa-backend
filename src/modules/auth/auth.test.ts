@@ -17,7 +17,7 @@ const {
   ForbiddenError,
 } = await import('./auth.service.js');
 
-const { UserModel } = await import('../users/user.model.js');
+const { User: UserModel } = await import('../db/users.model.js');
 const { RefreshToken } = await import('../db/refresh-tokens.model.js');
 
 let mongod: MongoMemoryServer;

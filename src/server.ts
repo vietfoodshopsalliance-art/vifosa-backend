@@ -15,7 +15,6 @@ import { usersRoutes } from './modules/users/users.routes.js';
 import { storesRoutes } from './modules/stores/stores.routes.js';
 import menuRoutes from './modules/menu/menu.routes.js';
 import './modules/db/orders.model.js';
-import { runUpdateSoldCount } from './jobs/update-sold-count.job.js';
 import { requireAuth } from './middleware/auth.middleware.js';
 import { homeRoutes } from './modules/home/home.routes.js';
 import { searchRoutes } from './modules/search/search.routes.js';
@@ -72,13 +71,6 @@ app.register(adminRoutes,             { prefix: '' });
 app.register(trackingRoutes,          { prefix: '' });
 app.register(supportRoutes,            { prefix: '' })
 app.register(storeMembershipRoutes,   { prefix: '' })
-
-app.post('/admin/jobs/update-sold-count', { preHandler: requireAuth }, async (req, reply) => {
-  const user = (req as any).user;
-  if (!user.roles?.includes('admin')) return reply.status(403).send({ error: 'Forbidden' });
-  await runUpdateSoldCount();
-  return reply.send({ ok: true });
-});
 
 const PORT = Number(process.env.PORT ?? 8080);
 

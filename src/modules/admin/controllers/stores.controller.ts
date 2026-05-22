@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { Store } from '../../db/stores.model.js';
-import { UserModel } from '../../users/user.model.js';
+import { User as UserModel } from '../../db/users.model.js'
 
 // GET /admin/stores?search=&filter=&limit=&cursor=
 export async function listStores(req: FastifyRequest, reply: FastifyReply) {

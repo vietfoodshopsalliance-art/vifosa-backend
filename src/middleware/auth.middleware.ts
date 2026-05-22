@@ -1,7 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { verifyAccessToken } from '../utils/jwt.js'
 import { User } from '../modules/db/users.model.js'
-import type { UserRole } from '../modules/users/user.types.js'
+import type { UserRole } from '../modules/db/users.model.js'
 
 declare module 'fastify' {
   interface FastifyRequest {

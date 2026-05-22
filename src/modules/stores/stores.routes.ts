@@ -188,7 +188,7 @@ export async function storesRoutes(app: FastifyInstance) {
       if (!mongoose.isValidObjectId(req.params.storeId)) {
         return reply.code(400).send({ error: 'storeId không hợp lệ' })
       }
-      const store = await Store.findOne({ _id: req.params.storeId, isDeleted: false, isSuspended: false })
+      const store = await Store.findOne({ _id: req.params.storeId, isDeleted: { $ne: true }, isSuspended: { $ne: true } })
       if (!store) return reply.code(404).send({ error: 'Không tìm thấy quán' })
       return reply.send(store)
     }

@@ -8,7 +8,7 @@ async function assertStoreOwner(storeId: string, userId: string, reply: any) {
     reply.code(400).send({ error: 'storeId không hợp lệ' })
     return null
   }
-  const store = await Store.findOne({ _id: storeId, isDeleted: false })
+  const store = await Store.findOne({ _id: storeId, isDeleted: { $ne: true } })
   if (!store) { reply.code(404).send({ error: 'Không tìm thấy quán' }); return null }
   if (store.ownerId.toString() !== userId) {
     reply.code(403).send({ error: 'Bạn không phải chủ quán này' }); return null
