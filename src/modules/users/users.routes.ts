@@ -238,7 +238,7 @@ fastify.get('/me/reviews-given', { preHandler: requireAuth }, async (request, re
   const filter = { fromUserId: new (await import('mongoose')).default.Types.ObjectId(userId), toEntityType: 'store' as const };
   const [reviews, total] = await Promise.all([
     Review.find(filter)
-      .populate('toEntityId', 'name avatarImage')
+      .populate({ path: 'toEntityId', model: 'Store', select: 'name avatarImage' })
       .populate('orderId', 'code')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)

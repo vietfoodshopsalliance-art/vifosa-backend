@@ -5,7 +5,7 @@ import mongoose from 'mongoose'
 
 export async function reviewRoutes(app: FastifyInstance) {
   // ── GET /stores/:storeId/reviews (public) ─────────────────────────────────
-  app.get<{ Params: { storeId: string }; Querystring: { page?: string; limit?: string } }>(
+  app.get<{ Params: { storeId: string }; Querystring: { page?: string; limit?: string; rating?: string } }>(
     '/stores/:storeId/reviews',
     async (req, reply) => {
       if (!mongoose.isValidObjectId(req.params.storeId)) {
@@ -14,7 +14,8 @@ export async function reviewRoutes(app: FastifyInstance) {
       const page  = Math.max(1, parseInt(req.query.page  ?? '1'))
       const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '20')))
       const storeObjId = new mongoose.Types.ObjectId(req.params.storeId)
-      const filter = { toEntityId: storeObjId, toEntityType: 'store' as const, isHiddenByAdmin: false }
+      const filter: any = { toEntityId: storeObjId, toEntityType: 'store', isHiddenByAdmin: false }
+      if (req.query.rating) filter.stars = parseInt(req.query.rating)
 
       const [reviews, total] = await Promise.all([
         Review.find(filter)
@@ -24,7 +25,23 @@ export async function reviewRoutes(app: FastifyInstance) {
           .limit(limit),
         Review.countDocuments(filter),
       ])
-      return reply.send({ reviews, total, page, limit })
+
+      // Flatten populated fromUserId → top-level nickname/avatar
+      const formatted = reviews.map(r => {
+        const rv = r.toObject() as any
+        const user = rv.fromUserId
+        return {
+          ...rv,
+          _id: rv._id.toString(),
+          orderId: rv.orderId.toString(),
+          toEntityId: rv.toEntityId.toString(),
+          fromUserId: rv.isAnonymous ? null : (user?._id?.toString() ?? null),
+          nickname: rv.isAnonymous ? null : (user?.nickname ?? null),
+          avatar: rv.isAnonymous ? null : (user?.avatarUrl ?? null),
+        }
+      })
+
+      return reply.send({ reviews: formatted, total, page, limit })
     }
   )
 

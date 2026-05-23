@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
 import { requireAuth } from '../../middleware/auth.middleware.js'
-import { Store, MenuCategory, MenuItem } from '../db/index.js'
+import { Store, MenuCategory, MenuItem, Like } from '../db/index.js'
+import { verifyAccessToken } from '../../utils/jwt.js'
 import mongoose from 'mongoose'
 
 async function assertStoreOwner(storeId: string, userId: string, reply: any) {
@@ -30,6 +31,26 @@ export default async function menuRoutes(app: FastifyInstance) {
         MenuItem.find({ storeId: storeObjId, isDeleted: false, status: { $ne: 'closed' } })
           .sort({ categoryId: 1, createdAt: 1 }),
       ])
+
+      // Gắn likeId nếu user đã đăng nhập
+      let userId: string | null = null
+      try {
+        const authHeader = req.headers.authorization
+        const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : (req as any).cookies?.accessToken
+        if (token) userId = verifyAccessToken(token).sub
+      } catch { /* guest — bỏ qua */ }
+
+      if (userId) {
+        const itemIds = items.map(i => i._id)
+        const likes = await Like.find({ userId, targetType: 'item', targetId: { $in: itemIds } }).lean()
+        const likeMap = new Map(likes.map((l: any) => [l.targetId.toString(), l._id.toString()]))
+        const itemsWithLikes = items.map(item => ({
+          ...(item.toObject() as any),
+          likeId: likeMap.get(item._id.toString()) ?? null,
+        }))
+        return reply.send({ categories, items: itemsWithLikes })
+      }
+
       return reply.send({ categories, items })
     }
   )
