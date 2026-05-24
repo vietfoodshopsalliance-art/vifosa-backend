@@ -4,7 +4,7 @@ import { adminResetPassword as doResetPassword } from '../../auth/auth.service.j
 import { RefreshToken } from '../../db/refresh-tokens.model.js'
 import { AuditLog } from '../../db/misc.model.js'
 
-const ALLOWED_GRANTABLE_ROLES = ['mod', 'admin'] as const
+const ALLOWED_GRANTABLE_ROLES = ['mod', 'admin', 'store_owner'] as const
 
 // GET /admin/users
 export async function listUsers(req: FastifyRequest, reply: FastifyReply) {

@@ -151,10 +151,13 @@ export async function loginUser(
   const accessToken = signAccessToken(userId)
   const { token: refreshToken, jti } = signRefreshToken(userId)
 
-  await storeRefreshToken(userId, refreshToken, jti, {
-    ip: meta?.ip,
-    headers: meta?.userAgent ? { 'user-agent': meta.userAgent } : {},
-  })
+  const [, ownedStore] = await Promise.all([
+    storeRefreshToken(userId, refreshToken, jti, {
+      ip: meta?.ip,
+      headers: meta?.userAgent ? { 'user-agent': meta.userAgent } : {},
+    }),
+    Store.findOne({ ownerId: userId, isDeleted: false }).select('_id').lean(),
+  ])
 
   return {
     accessToken,
@@ -171,6 +174,7 @@ export async function loginUser(
       notificationPrefs: user.notificationPrefs,
       tosAcceptedAt: user.tosAcceptedAt,
       tosVersion: user.tosVersion,
+      storeId: ownedStore?._id?.toString() ?? '',
     },
   }
 }

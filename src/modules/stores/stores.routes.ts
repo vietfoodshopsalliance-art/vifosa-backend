@@ -3,6 +3,7 @@ import { requireAuth } from '../../middleware/auth.middleware.js'
 import { Store } from '../db/index.js'
 import { Order } from '../db/index.js'
 import { Review } from '../db/index.js'
+import { User } from '../db/index.js'
 import mongoose from 'mongoose'
 
 export async function storesRoutes(app: FastifyInstance) {
@@ -59,6 +60,7 @@ export async function storesRoutes(app: FastifyInstance) {
     })
 
     await store.save()
+    await User.findByIdAndUpdate(userId, { $addToSet: { roles: 'store_owner' } })
     return reply.code(201).send(store)
   })
 
