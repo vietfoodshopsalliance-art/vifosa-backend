@@ -37,8 +37,10 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/admin/products', { preHandler: requireRole(['admin', 'mod']) }, productsCtrl.listProducts)
 
   // ─── Settings ─────────────────────────────────────────────────────────────
-  app.get('/admin/settings',   { preHandler: requireRole(['admin']) }, settingsCtrl.getSettings)
-  app.patch('/admin/settings', { preHandler: requireRole(['admin']) }, settingsCtrl.updateSettings)
+  app.get('/admin/settings',          { preHandler: requireRole(['admin']) }, settingsCtrl.getSettings)
+  app.patch('/admin/settings',        { preHandler: requireRole(['admin']) }, settingsCtrl.updateSettings)
+  app.get('/admin/settings/:key',     { preHandler: requireRole(['admin']) }, settingsCtrl.getSetting)
+  app.put('/admin/settings/:key',     { preHandler: requireRole(['admin']) }, settingsCtrl.upsertSetting)
 
   // ─── Reports / Moderation ─────────────────────────────────────────────────
   app.get('/admin/reports',                           { preHandler: requireRole(['admin', 'mod']) }, reportsCtrl.listReports)

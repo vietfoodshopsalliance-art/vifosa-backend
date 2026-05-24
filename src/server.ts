@@ -26,7 +26,8 @@ import { notificationPrefsRoutes } from './modules/notifications/notificationPre
 import { socialRoutes } from './modules/social/social.routes.js';
 import './modules/db/social.model.js';
 import { reviewRoutes } from './modules/reviews/index.js';
-import { adminRoutes } from './modules/admin/admin.routes.js';
+import { adminRoutes } from './modules/admin/admin.routes.js'
+import { getPublicSetting } from './modules/admin/controllers/settings.controller.js';
 import { trackingRoutes } from './modules/orders/tracking.routes.js';
 import { guestOrderRoutes } from './modules/orders/guest-order.routes.js';
 import { publicTrackRoutes } from './modules/orders/public-track.routes.js';
@@ -70,6 +71,7 @@ app.register(notificationPrefsRoutes, { prefix: '' });
 app.register(socialRoutes,            { prefix: '' });
 app.register(reviewRoutes,            { prefix: '' });
 app.register(adminRoutes,             { prefix: '' });
+app.get('/settings/:key', getPublicSetting);
 app.register(trackingRoutes,          { prefix: '' });
 app.register(guestOrderRoutes,        { prefix: '' });
 app.register(publicTrackRoutes,       { prefix: '' });
