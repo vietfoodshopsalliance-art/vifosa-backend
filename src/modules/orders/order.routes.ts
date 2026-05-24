@@ -23,7 +23,7 @@ function tabToStatuses(tab: OrderTab): MainStatus[] {
 export async function orderRoutes(app: FastifyInstance) {
   // ── GET /me/stores/:storeId/orders ────────────────────────────────────────
   // Query: tab=pending|active|history (default: pending), page, limit
-  app.get<{ Params: { storeId: string }; Querystring: { tab?: string; page?: string; limit?: string } }>(
+  app.get<{ Params: { storeId: string }; Querystring: { tab?: string; page?: string; limit?: string; dateFrom?: string; dateTo?: string } }>(
     '/me/stores/:storeId/orders',
     { preHandler: requireAuth },
     async (req, reply) => {
@@ -38,10 +38,16 @@ export async function orderRoutes(app: FastifyInstance) {
 
       const tab = (req.query.tab ?? 'pending') as OrderTab
       const page  = Math.max(1, parseInt(req.query.page  ?? '1'))
-      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit ?? '20')))
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit ?? '20')))
 
       const statuses = tabToStatuses(tab)
-      const filter = { storeId: store._id, mainStatus: { $in: statuses } }
+      const filter: any = { storeId: store._id, mainStatus: { $in: statuses } }
+
+      if (req.query.dateFrom || req.query.dateTo) {
+        filter.createdAt = {}
+        if (req.query.dateFrom) filter.createdAt.$gte = new Date(req.query.dateFrom)
+        if (req.query.dateTo)   filter.createdAt.$lte = new Date(req.query.dateTo)
+      }
 
       const [orders, total] = await Promise.all([
         Order.find(filter)
@@ -138,8 +144,10 @@ export async function orderRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: `Đơn đang ở "${order.mainStatus}", cần giao xong mới hoàn thành` })
       }
 
+      const now = new Date()
       order.mainStatus = 'completed'
-      order.statusHistory.push({ status: 'completed', at: new Date(), by: req.user!.userId })
+      order.statusHistory.push({ status: 'completed', at: now, by: req.user!.userId })
+      if (!order.completedAt) order.completedAt = now
       await order.save()
 
       emitOrderStatus(order._id.toString(), 'completed')

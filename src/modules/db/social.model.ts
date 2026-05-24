@@ -87,7 +87,7 @@ const ReviewSchema = new Schema<IReview>(
 )
 
 ReviewSchema.index({ toEntityId: 1, toEntityType: 1, createdAt: -1 })
-ReviewSchema.index({ orderId: 1 }, { unique: true }) // 1 review/order
+ReviewSchema.index({ orderId: 1, toEntityType: 1 }, { unique: true }) // 1 review/order/type
 ReviewSchema.index({ fromUserId: 1 })
 ReviewSchema.index({ isHiddenByAdmin: 1 })
 

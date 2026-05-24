@@ -28,6 +28,8 @@ import './modules/db/social.model.js';
 import { reviewRoutes } from './modules/reviews/index.js';
 import { adminRoutes } from './modules/admin/admin.routes.js';
 import { trackingRoutes } from './modules/orders/tracking.routes.js';
+import { guestOrderRoutes } from './modules/orders/guest-order.routes.js';
+import { publicTrackRoutes } from './modules/orders/public-track.routes.js';
 import { supportRoutes } from './modules/support/support.routes.js'
 import { storeMembershipRoutes } from './modules/stores/store-membership.routes.js';
 import { initCronJobs } from './jobs/index.js';
@@ -69,6 +71,8 @@ app.register(socialRoutes,            { prefix: '' });
 app.register(reviewRoutes,            { prefix: '' });
 app.register(adminRoutes,             { prefix: '' });
 app.register(trackingRoutes,          { prefix: '' });
+app.register(guestOrderRoutes,        { prefix: '' });
+app.register(publicTrackRoutes,       { prefix: '' });
 app.register(supportRoutes,            { prefix: '' })
 app.register(storeMembershipRoutes,   { prefix: '' })
 

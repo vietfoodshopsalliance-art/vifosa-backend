@@ -114,6 +114,8 @@ export interface IOrder extends Document {
     at: Date
     by: string
   }[]
+  completedAt: Date | null
+  _reviewNotifsSent: string[]
   createdAt: Date
   updatedAt: Date
 }
@@ -357,6 +359,8 @@ const OrderSchema = new Schema<IOrder>(
       ],
       default: [],
     },
+    completedAt: { type: Date, default: null },
+    _reviewNotifsSent: { type: [String], default: [] },
   },
   {
     timestamps: true,

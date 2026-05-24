@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { runUpdateSoldCount } from './update-sold-count.job.js';
 import { runAutoCompleteOrders } from './auto-complete-orders.job.js';
+import { runReviewReminders } from './review-reminder.job.js';
 
 export async function initCronJobs() {
   // Mỗi đêm 02:00: cập nhật soldCount (allTime, last7d, last30d, last365d)
@@ -18,6 +19,15 @@ export async function initCronJobs() {
       await runAutoCompleteOrders();
     } catch (err) {
       console.error('[cron] auto-complete-orders failed:', err);
+    }
+  });
+
+  // Mỗi giờ: push nhắc nhở đánh giá (1h / 3h / 6h sau khi giao)
+  cron.schedule('0 * * * *', async () => {
+    try {
+      await runReviewReminders();
+    } catch (err) {
+      console.error('[cron] review-reminders failed:', err);
     }
   });
 }

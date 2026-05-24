@@ -115,12 +115,6 @@ export async function logoutAll(req: FastifyRequest, reply: FastifyReply) {
   return reply.code(200).send({ success: true, message: 'Đã đăng xuất tất cả thiết bị' })
 }
 
-// GET /me
-export async function getMe(req: FastifyRequest, reply: FastifyReply) {
-  const result = await AuthService.getMe(req.user!.userId)
-  return reply.code(200).send({ success: true, data: result })
-}
-
 // POST /me/fcm-token
 export async function addFcmToken(req: FastifyRequest, reply: FastifyReply) {
   const parsed = UpdateFcmTokenSchema.safeParse(req.body)
@@ -181,6 +175,3 @@ export async function adminResetPassword(req: FastifyRequest, reply: FastifyRepl
     return handleServiceError(err, reply)
   }
 }
-
-// Compat export (dùng bởi users.routes.ts dynamic import)
-export { addFcmToken as saveFcmToken }

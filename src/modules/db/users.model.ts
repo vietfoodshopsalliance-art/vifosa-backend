@@ -32,6 +32,11 @@ export interface IUser extends Document {
     promotions: boolean
     social: boolean
   }
+  privacy: {
+    showPhone: boolean
+    showAddress: boolean
+    showFavorites: boolean
+  }
   fcmTokens: string[]
   tosAcceptedAt: Date | null
   tosVersion: string | null
@@ -141,6 +146,17 @@ const UserSchema = new Schema<IUser>(
         { _id: false }
       ),
       default: () => ({ orderUpdates: true, promotions: false, social: true }),
+    },
+    privacy: {
+      type: new Schema(
+        {
+          showPhone:     { type: Boolean, default: false },
+          showAddress:   { type: Boolean, default: false },
+          showFavorites: { type: Boolean, default: false },
+        },
+        { _id: false }
+      ),
+      default: () => ({ showPhone: false, showAddress: false, showFavorites: false }),
     },
     fcmTokens: {
       type: [String],

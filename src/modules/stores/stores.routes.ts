@@ -164,8 +164,8 @@ export async function storesRoutes(app: FastifyInstance) {
         Order.countDocuments({ storeId: storeObjId, createdAt: { $gte: startOfToday } }),
         // Rating trung bình
         Review.aggregate([
-          { $match: { storeId: storeObjId } },
-          { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+          { $match: { toEntityId: storeObjId, toEntityType: 'store', isHiddenByAdmin: false } },
+          { $group: { _id: null, avg: { $avg: '$stars' }, count: { $sum: 1 } } },
         ]),
       ])
 
@@ -178,6 +178,24 @@ export async function storesRoutes(app: FastifyInstance) {
         avgRating: reviewAgg[0]?.avg ? Math.round(reviewAgg[0].avg * 10) / 10 : 0,
         totalReviews: reviewAgg[0]?.count ?? 0,
       })
+    }
+  )
+
+  // ── DELETE /me/stores/:storeId — soft delete ─────────────────────────────
+  app.delete<{ Params: { storeId: string } }>(
+    '/me/stores/:storeId',
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const store = await assertOwner(req.params.storeId, req.user!.userId, reply)
+      if (!store) return
+
+      store.isDeleted = true
+      store.deletedAt = new Date()
+      store.isOpen = false
+      store.emergencyClosed = true
+      await store.save()
+
+      return reply.send({ ok: true })
     }
   )
 

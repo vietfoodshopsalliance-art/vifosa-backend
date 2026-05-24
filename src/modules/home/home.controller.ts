@@ -99,12 +99,12 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   const excludeIds = new Set<string>();
   const toOIds = (ids: Set<string>) => [...ids].map(id => new mongoose.Types.ObjectId(id));
 
-  // ── Group 1: n newest ≤7 days, within radius ────────────────────────────────
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // ── Group 1: n newest ≤30 days, within radius ───────────────────────────────
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const newStores = await Store.find({
     ...baseFilter,
     ...geoWithin,
-    createdAt: { $gte: sevenDaysAgo },
+    createdAt: { $gte: thirtyDaysAgo },
   })
     .sort({ createdAt: -1 })
     .limit(N)
@@ -160,9 +160,10 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
       .select('targetId')
       .lean();
 
+    // Không lọc excludeIds: "Yêu thích" là section cá nhân hoá,
+    // luôn hiện đúng top-N quán user đã like dù có trùng section khác.
     const favIds = liked
       .map((l: any) => l.targetId)
-      .filter((id: any) => !excludeIds.has(String(id)))
       .slice(0, N);
 
     if (favIds.length > 0) {

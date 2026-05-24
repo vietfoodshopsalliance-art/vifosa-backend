@@ -50,6 +50,8 @@ export interface IStore extends Document {
     avgRating: number
     totalReviews: number
   }
+  isDeleted: boolean
+  deletedAt: Date | null
   createdAt: Date
   updatedAt: Date
 }
@@ -210,6 +212,8 @@ const StoreSchema = new Schema<IStore>(
       ),
       default: () => ({ completedOrdersThisMonth: 0, avgRating: 0, totalReviews: 0 }),
     },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

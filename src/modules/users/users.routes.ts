@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { Address } from '../db/index.js';
+import { Address, Order, Review, Like, Store } from '../db/index.js';
 import { requireAuth } from '../../middleware/auth.middleware.js';
 import mongoose from 'mongoose';
 
@@ -239,6 +239,131 @@ fastify.get('/me/reviews-given', { preHandler: requireAuth }, async (request, re
   const [reviews, total] = await Promise.all([
     Review.find(filter)
       .populate({ path: 'toEntityId', model: 'Store', select: 'name avatarImage' })
+      .populate('orderId', 'code')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    Review.countDocuments(filter),
+  ]);
+
+  return reply.send({ reviews, total, page, limit });
+});
+
+// PATCH /me/privacy — cập nhật cài đặt quyền riêng tư
+fastify.patch('/me/privacy', { preHandler: requireAuth }, async (request, reply) => {
+  const User = (mongoose.models['User'] as any) || mongoose.model('User');
+  const userId = (request as any).user.userId;
+  const { showPhone, showAddress, showFavorites } = request.body as any;
+
+  const update: any = {};
+  if (typeof showPhone     === 'boolean') update['privacy.showPhone']     = showPhone;
+  if (typeof showAddress   === 'boolean') update['privacy.showAddress']   = showAddress;
+  if (typeof showFavorites === 'boolean') update['privacy.showFavorites'] = showFavorites;
+
+  if (Object.keys(update).length === 0) {
+    return reply.status(400).send({ error: 'Không có field nào được cập nhật' });
+  }
+
+  const updated = await User.findByIdAndUpdate(userId, { $set: update }, { new: true }).select('-passwordHash -fcmTokens');
+  return reply.send({ user: updated });
+});
+
+// GET /me/stores/:storeId/customers/:customerId — hồ sơ khách (dành cho chủ quán)
+fastify.get('/me/stores/:storeId/customers/:customerId', { preHandler: requireAuth }, async (request, reply) => {
+  const User = (mongoose.models['User'] as any) || mongoose.model('User');
+  const userId = (request as any).user.userId;
+  const { storeId, customerId } = request.params as any;
+
+  if (!mongoose.isValidObjectId(storeId) || !mongoose.isValidObjectId(customerId)) {
+    return reply.status(400).send({ error: 'ID không hợp lệ' });
+  }
+
+  // Xác nhận quyền chủ quán
+  const store = await Store.findOne({ _id: storeId, ownerId: userId, isDeleted: { $ne: true } });
+  if (!store) return reply.status(403).send({ error: 'Bạn không có quyền truy cập' });
+
+  const customer = await User.findById(customerId).select('username nickname avatar phone privacy createdAt');
+  if (!customer) return reply.status(404).send({ error: 'Không tìm thấy người dùng' });
+
+  const customerObjId = new mongoose.Types.ObjectId(customerId);
+  const storeObjId    = new mongoose.Types.ObjectId(storeId);
+
+  const [completedCount, cancelledCount, ratingAgg, defaultAddress, likedStores, likedItems] = await Promise.all([
+    Order.countDocuments({ customerId: customerObjId, storeId: storeObjId, mainStatus: 'completed' }),
+    Order.countDocuments({ customerId: customerObjId, storeId: storeObjId, mainStatus: 'cancelled' }),
+    Review.aggregate([
+      { $match: { toEntityId: customerObjId, toEntityType: 'customer', isHiddenByAdmin: false } },
+      { $group: { _id: null, avg: { $avg: '$stars' }, count: { $sum: 1 } } },
+    ]),
+    customer.privacy?.showAddress
+      ? Address.findOne({ userId: customerObjId, isDefault: true })
+      : Promise.resolve(null),
+    customer.privacy?.showFavorites
+      ? Like.find({ userId: customerObjId, targetType: 'store' })
+          .populate('targetId', 'name avatarImage')
+          .sort({ createdAt: -1 })
+          .limit(10)
+      : Promise.resolve([]),
+    customer.privacy?.showFavorites
+      ? Like.find({ userId: customerObjId, targetType: 'item' })
+          .populate('targetId', 'name image price')
+          .sort({ createdAt: -1 })
+          .limit(10)
+      : Promise.resolve([]),
+  ]);
+
+  return reply.send({
+    userId:   customer._id.toString(),
+    username: customer.username,
+    nickname: customer.nickname,
+    avatar:   customer.avatar ?? null,
+    phone:    customer.privacy?.showPhone ? customer.phone : null,
+    address:  defaultAddress
+      ? { text: (defaultAddress as any).address?.text, receiver: (defaultAddress as any).receiver }
+      : null,
+    customerRating:      ratingAgg[0] ? Math.round(ratingAgg[0].avg * 10) / 10 : null,
+    customerRatingCount: ratingAgg[0]?.count ?? 0,
+    completedOrdersWithStore: completedCount,
+    cancelledOrdersWithStore: cancelledCount,
+    likedStores: customer.privacy?.showFavorites
+      ? (likedStores as any[]).map(l => ({
+          storeId: (l.targetId as any)?._id?.toString(),
+          name:    (l.targetId as any)?.name,
+          avatar:  (l.targetId as any)?.avatarImage,
+        }))
+      : null,
+    likedItems: customer.privacy?.showFavorites
+      ? (likedItems as any[]).map(l => ({
+          itemId: (l.targetId as any)?._id?.toString(),
+          name:   (l.targetId as any)?.name,
+          image:  (l.targetId as any)?.image,
+          price:  (l.targetId as any)?.price,
+        }))
+      : null,
+  });
+});
+
+// GET /me/stores/:storeId/customers/:customerId/reviews — chủ quán xem reviews của khách
+fastify.get('/me/stores/:storeId/customers/:customerId/reviews', { preHandler: requireAuth }, async (request, reply) => {
+  const userId = (request as any).user.userId;
+  const { storeId, customerId } = request.params as any;
+
+  if (!mongoose.isValidObjectId(storeId) || !mongoose.isValidObjectId(customerId)) {
+    return reply.status(400).send({ error: 'ID không hợp lệ' });
+  }
+
+  const store = await Store.findOne({ _id: storeId, ownerId: userId, isDeleted: { $ne: true } });
+  if (!store) return reply.status(403).send({ error: 'Bạn không có quyền truy cập' });
+
+  const page  = Math.max(1, parseInt((request.query as any).page  ?? '1'));
+  const limit = Math.min(50, Math.max(1, parseInt((request.query as any).limit ?? '20')));
+
+  const customerObjId = new mongoose.Types.ObjectId(customerId);
+  const filter = { toEntityId: customerObjId, toEntityType: 'customer' as const, isHiddenByAdmin: false };
+
+  const [reviews, total] = await Promise.all([
+    Review.find(filter)
+      .populate('fromUserId', 'nickname avatar')
       .populate('orderId', 'code')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)

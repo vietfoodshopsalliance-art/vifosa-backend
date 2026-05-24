@@ -92,8 +92,10 @@ export async function trackingRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: 'Đơn hàng chưa ở trạng thái có thể xác nhận' })
       }
 
+      const now = new Date()
       order.mainStatus = 'delivered'
-      order.statusHistory.push({ status: 'delivered', at: new Date(), by: req.user!.userId })
+      order.statusHistory.push({ status: 'delivered', at: now, by: req.user!.userId })
+      if (!order.completedAt) order.completedAt = now
       await order.save()
 
       emitOrderStatus(order._id.toString(), 'delivered')
