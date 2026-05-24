@@ -18,7 +18,7 @@ export async function updateSettings(
     Object.entries(updates).map(([key, value]) =>
       Setting.findOneAndUpdate(
         { key },
-        { $set: { value, updatedBy: user?.sub ?? null } },
+        { $set: { value, updatedBy: user?.userId ?? null } },
         { upsert: true, new: true },
       ),
     ),
@@ -45,7 +45,7 @@ export async function upsertSetting(
   const user = (req as any).user;
   const doc = await Setting.findOneAndUpdate(
     { key },
-    { $set: { value, updatedBy: user?.sub ?? null } },
+    { $set: { value, updatedBy: user?.userId ?? null } },
     { upsert: true, new: true },
   ).lean();
   return reply.send({ value: doc!.value, updatedAt: doc!.updatedAt, updatedBy: doc!.updatedBy });
