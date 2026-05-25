@@ -258,6 +258,13 @@ export async function getMe(userId: string) {
 
   if (!user) throw new NotFoundError('User không tồn tại', 'NOT_FOUND')
 
+  // Self-heal: nếu user có store nhưng thiếu store_owner role (có thể xảy ra
+  // khi store được tạo trước fix role-auto-assign), tự thêm role vào DB.
+  if (ownedStores.length > 0 && !(user.roles as string[]).includes('store_owner')) {
+    await User.findByIdAndUpdate(userId, { $addToSet: { roles: 'store_owner' } })
+    ;(user as any).roles = [...(user.roles as string[]), 'store_owner']
+  }
+
   return {
     ...user,
     ownedStores: ownedStores.map((s) => ({ _id: s._id, name: s.name })),

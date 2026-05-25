@@ -20,6 +20,7 @@ export async function storesRoutes(app: FastifyInstance) {
       return null
     }
     if (store.ownerId.toString() !== userId) {
+      reply.log.warn({ storeId, storeOwnerId: store.ownerId.toString(), requestUserId: userId }, '[assertOwner] 403 owner mismatch')
       reply.code(403).send({ error: 'Bạn không phải chủ quán này' })
       return null
     }

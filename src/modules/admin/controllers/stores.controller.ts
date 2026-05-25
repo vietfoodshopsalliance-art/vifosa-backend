@@ -84,6 +84,7 @@ export async function transferStore(req: FastifyRequest, reply: FastifyReply) {
     { new: true }
   );
   if (!store) return reply.code(404).send({ error: 'Store not found' });
+  await UserModel.findByIdAndUpdate(newOwner._id, { $addToSet: { roles: 'store_owner' } });
   return reply.send({ ok: true });
 }
 

@@ -105,6 +105,7 @@ io.on('connection', (socket) => {
   socket.on('join:order',  (orderId: string) => socket.join(`order:${orderId}`));
   socket.on('join:store',  (storeId: string) => socket.join(`store:${storeId}`));
   socket.on('leave:order', (orderId: string) => socket.leave(`order:${orderId}`));
+  socket.on('leave:store', (storeId: string) => socket.leave(`store:${storeId}`));
   socket.on('join:user',   (userId: string)  => socket.join(`user:${userId}`));
   socket.on('join:admin-notifications', () => socket.join('admin:notifications'));
 });

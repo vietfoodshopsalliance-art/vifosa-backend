@@ -33,6 +33,7 @@ export async function orderRoutes(app: FastifyInstance) {
       const store = await Store.findOne({ _id: req.params.storeId, isDeleted: { $ne: true } })
       if (!store) return reply.code(404).send({ error: 'Không tìm thấy quán' })
       if (store.ownerId.toString() !== req.user!.userId) {
+        req.log.warn({ storeId: req.params.storeId, storeOwnerId: store.ownerId.toString(), requestUserId: req.user!.userId }, '[orderRoutes] 403 owner mismatch')
         return reply.code(403).send({ error: 'Bạn không phải chủ quán này' })
       }
 

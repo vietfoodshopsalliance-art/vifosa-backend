@@ -2,6 +2,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import mongoose from 'mongoose';
+import NodeCache from 'node-cache';
 import { Store, Order, Like } from '../db/index.js';
 import { verifyAccessToken } from '../../utils/jwt.js';
 
@@ -10,6 +11,17 @@ const PAGE_SIZE = 20;
 const MAX_RADIUS_KM = 25;
 const DEFAULT_RADIUS_KM = 5;
 const EARTH_RADIUS_KM = 6371;
+
+const feedCache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
+
+function buildCacheKey(lat: number | null, lng: number | null, radius: number, userId: string | null): string | null {
+  if (lat == null || lng == null) return null;
+  const lat2 = (Math.round(lat * 100) / 100).toFixed(2);
+  const lng2 = (Math.round(lng * 100) / 100).toFixed(2);
+  return userId
+    ? `home:${userId}:${lat2}:${lng2}:${radius}`
+    : `home:${lat2}:${lng2}:${radius}`;
+}
 
 const SELECT_FIELDS = 'name description avatarImage coverImage address isOpen emergencyClosed stats vipTier';
 
@@ -88,6 +100,13 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
       nextCursor: hasMore ? cursor + PAGE_SIZE : null,
       hasMore,
     });
+  }
+
+  // ── Cache check (initial load only) ───────────────────────────────────────
+  const cKey = buildCacheKey(lat, lng, radiusKm, userId);
+  if (cKey) {
+    const hit = feedCache.get(cKey);
+    if (hit) return reply.send(hit);
   }
 
   // ── Full initial load ───────────────────────────────────────────────────────
@@ -202,7 +221,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   const hasMore = nearbyStores.length > PAGE_SIZE;
   const nearbyPage = nearbyStores.slice(0, PAGE_SIZE);
 
-  return reply.send({
+  const payload = {
     newStores:       newStores.map(s => toStoreCard(s)),
     trendingStores:  trendingStores.map(s => toStoreCard(s)),
     recentPurchases: recentPurchases.map(s => toStoreCard(s)),
@@ -210,5 +229,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
     nearbyStores:    nearbyPage.map(s => toStoreCard(s, (s as any).distanceMeters)),
     nextCursor:      hasMore ? PAGE_SIZE : null,
     hasMore,
-  });
+  };
+  if (cKey) feedCache.set(cKey, payload);
+  return reply.send(payload);
 }
