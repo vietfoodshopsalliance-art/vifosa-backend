@@ -131,16 +131,36 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
     .lean();
   newStores.forEach(s => excludeIds.add(String(s._id)));
 
-  // ── Group 3: n best-selling 30 days, within radius ──────────────────────────
-  const trendingStores = await Store.find({
-    ...baseFilter,
-    ...geoWithin,
-    _id: { $nin: toOIds(excludeIds) },
-  })
-    .sort({ 'stats.completedOrdersThisMonth': -1 })
-    .limit(N)
-    .select(SELECT_FIELDS)
-    .lean();
+  // ── Group 3: n best-selling 30 days — aggregate từ orders thực tế ───────────
+  const orderRank = await Order.aggregate([
+    { $match: { mainStatus: 'completed', createdAt: { $gte: thirtyDaysAgo } } },
+    { $group: { _id: '$storeId', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+    { $limit: N * 6 }, // oversample để lọc geo + exclude
+  ]);
+  let trendingStores: any[] = [];
+  if (orderRank.length > 0) {
+    const rankedIds = orderRank.map(r => r._id);
+    const docs = await Store.find({
+      ...baseFilter,
+      ...geoWithin,
+      _id: { $in: rankedIds, $nin: toOIds(excludeIds) },
+    }).select(SELECT_FIELDS).lean();
+    const countMap = new Map(orderRank.map(r => [r._id.toString(), r.count as number]));
+    trendingStores = docs
+      .sort((a, b) => (countMap.get(b._id.toString()) ?? 0) - (countMap.get(a._id.toString()) ?? 0))
+      .slice(0, N);
+  }
+  // Fallback: không có orders thì lấy bất kỳ store nào chưa trong excludeIds
+  if (trendingStores.length < N) {
+    const fallbackExclude = new Set([...excludeIds, ...trendingStores.map(s => String(s._id))]);
+    const fallback = await Store.find({
+      ...baseFilter,
+      ...geoWithin,
+      _id: { $nin: toOIds(fallbackExclude) },
+    }).limit(N - trendingStores.length).select(SELECT_FIELDS).lean();
+    trendingStores.push(...fallback);
+  }
   trendingStores.forEach(s => excludeIds.add(String(s._id)));
 
   // ── Group 4: recently purchased (no radius) ──────────────────────────────────

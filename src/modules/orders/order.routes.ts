@@ -151,6 +151,14 @@ export async function orderRoutes(app: FastifyInstance) {
       if (!order.completedAt) order.completedAt = now
       await order.save()
 
+      // Cập nhật stats của store
+      await Store.findByIdAndUpdate(order.storeId, {
+        $inc: {
+          'stats.completedOrdersThisMonth': 1,
+          'stats.totalCompletedOrders': 1,
+        },
+      })
+
       emitOrderStatus(order._id.toString(), 'completed')
       return reply.send(order)
     }
