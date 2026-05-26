@@ -46,6 +46,11 @@ export async function storesRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Địa chỉ và toạ độ là bắt buộc' })
     }
 
+    const storeCount = await Store.countDocuments({ ownerId: userId, isDeleted: { $ne: true } })
+    if (storeCount >= 8) {
+      return reply.code(403).send({ error: 'Mỗi tài khoản chỉ được tạo tối đa 8 cửa hàng' })
+    }
+
     const store = new Store({
       ownerId: userId,
       name: body.name.trim(),
