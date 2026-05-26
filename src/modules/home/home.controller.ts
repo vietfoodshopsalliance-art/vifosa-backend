@@ -3,10 +3,10 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import mongoose from 'mongoose';
 import NodeCache from 'node-cache';
-import { Store, Order, Like } from '../db/index.js';
+import { Store, Order, Like, MenuItem } from '../db/index.js';
 import { verifyAccessToken } from '../../utils/jwt.js';
 
-const N = 2; // stores per group (admin configurable later via Setting)
+const N = 2;
 const PAGE_SIZE = 20;
 const MAX_RADIUS_KM = 25;
 const DEFAULT_RADIUS_KM = 5;
@@ -42,6 +42,47 @@ function toStoreCard(store: any, distanceMeters?: number) {
   };
 }
 
+// Lấy nearbyItems từ các store docs (đã có distanceMeters nếu geo)
+async function buildNearbyItems(rawStoreDocs: any[]): Promise<any[]> {
+  if (rawStoreDocs.length === 0) return [];
+
+  const storeIds = rawStoreDocs.map((s: any) => s._id);
+
+  const itemDocs = await MenuItem.find({
+    storeId: { $in: storeIds },
+    status: 'active',
+    isDeleted: false,
+  })
+    .select('storeId name description price images soldCount')
+    .lean();
+
+  const storeInfoMap = new Map<string, { distanceMeters?: number; stats?: any }>(
+    rawStoreDocs.map((s: any) => [
+      String(s._id),
+      { distanceMeters: s.distanceMeters as number | undefined, stats: s.stats },
+    ])
+  );
+
+  return itemDocs
+    .map((item: any) => {
+      const info = storeInfoMap.get(String(item.storeId));
+      const dm = info?.distanceMeters;
+      return {
+        id: String(item._id),
+        name: item.name as string,
+        description: (item.description as string | null) ?? null,
+        price: item.price as number,
+        image: ((item.images as string[])[0]) ?? null,
+        soldCount: (item.soldCount as any)?.allTime ?? 0,
+        distanceKm: dm != null ? Math.round((dm / 1000) * 10) / 10 : null,
+        storeId: String(item.storeId),
+        avgRating: (info?.stats as any)?.avgRating ?? 0,
+        totalReviews: (info?.stats as any)?.totalReviews ?? 0,
+      };
+    })
+    .sort((a: any, b: any) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
+}
+
 function extractUserId(req: FastifyRequest): string | null {
   try {
     let token: string | undefined;
@@ -62,14 +103,13 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   const lat = q.lat != null ? Number(q.lat) : null;
   const lng = q.lng != null ? Number(q.lng) : null;
   const radiusKm = Math.min(Math.max(Number(q.radius ?? DEFAULT_RADIUS_KM), 1), MAX_RADIUS_KM);
-  // cursor = skip offset for group 6 load-more
   const cursor = q.cursor != null ? Number(q.cursor) : null;
   const userId = extractUserId(req);
 
   const hasGeo = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
   const baseFilter = { isSuspended: false, isDeleted: { $ne: true } };
 
-  // ── Load-more: only return next page of group 6 ────────────────────────────
+  // ── Load-more: trả nearbyStores + nearbyItems trang tiếp theo ─────────────
   if (cursor !== null) {
     const nearbyStores = hasGeo
       ? await Store.aggregate([
@@ -95,22 +135,24 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
 
     const hasMore = nearbyStores.length > PAGE_SIZE;
     const page = nearbyStores.slice(0, PAGE_SIZE);
+    const nearbyItems = await buildNearbyItems(page);
+
     return reply.send({
       nearbyStores: page.map(s => toStoreCard(s, (s as any).distanceMeters)),
+      nearbyItems,
       nextCursor: hasMore ? cursor + PAGE_SIZE : null,
       hasMore,
     });
   }
 
-  // ── Cache check (initial load only) ───────────────────────────────────────
+  // ── Cache check ──────────────────────────────────────────────────────────
   const cKey = buildCacheKey(lat, lng, radiusKm, userId);
   if (cKey) {
     const hit = feedCache.get(cKey);
     if (hit) return reply.send(hit);
   }
 
-  // ── Full initial load ───────────────────────────────────────────────────────
-  // $geoWithin allows custom sort (unlike $near which forces distance sort)
+  // ── Full initial load ─────────────────────────────────────────────────────
   const geoWithin = hasGeo
     ? { 'address.location': { $geoWithin: { $centerSphere: [[lng!, lat!], radiusKm / EARTH_RADIUS_KM] } } }
     : {};
@@ -118,7 +160,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   const excludeIds = new Set<string>();
   const toOIds = (ids: Set<string>) => [...ids].map(id => new mongoose.Types.ObjectId(id));
 
-  // ── Group 1: n newest ≤30 days, within radius ───────────────────────────────
+  // Group 1: Quán mới ≤30 ngày
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const newStores = await Store.find({
     ...baseFilter,
@@ -131,12 +173,12 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
     .lean();
   newStores.forEach(s => excludeIds.add(String(s._id)));
 
-  // ── Group 3: n best-selling 30 days — aggregate từ orders thực tế ───────────
+  // Group 3: Bán chạy
   const orderRank = await Order.aggregate([
     { $match: { mainStatus: 'completed', createdAt: { $gte: thirtyDaysAgo } } },
     { $group: { _id: '$storeId', count: { $sum: 1 } } },
     { $sort: { count: -1 } },
-    { $limit: N * 6 }, // oversample để lọc geo + exclude
+    { $limit: N * 6 },
   ]);
   let trendingStores: any[] = [];
   if (orderRank.length > 0) {
@@ -151,7 +193,6 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
       .sort((a, b) => (countMap.get(b._id.toString()) ?? 0) - (countMap.get(a._id.toString()) ?? 0))
       .slice(0, N);
   }
-  // Fallback: không có orders thì lấy bất kỳ store nào chưa trong excludeIds
   if (trendingStores.length < N) {
     const fallbackExclude = new Set([...excludeIds, ...trendingStores.map(s => String(s._id))]);
     const fallback = await Store.find({
@@ -163,7 +204,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   }
   trendingStores.forEach(s => excludeIds.add(String(s._id)));
 
-  // ── Group 4: recently purchased (no radius) ──────────────────────────────────
+  // Group 4: Đã mua gần đây
   let recentPurchases: any[] = [];
   if (userId) {
     const recentOrders = await Order.find({ customerId: userId, mainStatus: 'completed' })
@@ -190,7 +231,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
     recentPurchases.forEach(s => excludeIds.add(String(s._id)));
   }
 
-  // ── Group 5: favorites (no radius) ──────────────────────────────────────────
+  // Group 5: Yêu thích
   let favorites: any[] = [];
   if (userId) {
     const liked = await Like.find({ userId, targetType: 'store' })
@@ -199,12 +240,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
       .select('targetId')
       .lean();
 
-    // Không lọc excludeIds: "Yêu thích" là section cá nhân hoá,
-    // luôn hiện đúng top-N quán user đã like dù có trùng section khác.
-    const favIds = liked
-      .map((l: any) => l.targetId)
-      .slice(0, N);
-
+    const favIds = liked.map((l: any) => l.targetId).slice(0, N);
     if (favIds.length > 0) {
       favorites = await Store.find({ ...baseFilter, _id: { $in: favIds } })
         .select(SELECT_FIELDS)
@@ -213,7 +249,7 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
     favorites.forEach(s => excludeIds.add(String(s._id)));
   }
 
-  // ── Group 6: remaining nearby, sorted by distance ───────────────────────────
+  // Group 6: Quán gần bạn (sorted by distance)
   const nearbyQuery = { ...baseFilter, _id: { $nin: toOIds(excludeIds) } };
   let nearbyStores: any[];
   if (hasGeo) {
@@ -241,12 +277,16 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   const hasMore = nearbyStores.length > PAGE_SIZE;
   const nearbyPage = nearbyStores.slice(0, PAGE_SIZE);
 
+  // Lấy món ăn từ nearbyPage stores
+  const nearbyItems = await buildNearbyItems(nearbyPage);
+
   const payload = {
     newStores:       newStores.map(s => toStoreCard(s)),
     trendingStores:  trendingStores.map(s => toStoreCard(s)),
     recentPurchases: recentPurchases.map(s => toStoreCard(s)),
     favorites:       favorites.map(s => toStoreCard(s)),
     nearbyStores:    nearbyPage.map(s => toStoreCard(s, (s as any).distanceMeters)),
+    nearbyItems,
     nextCursor:      hasMore ? PAGE_SIZE : null,
     hasMore,
   };
