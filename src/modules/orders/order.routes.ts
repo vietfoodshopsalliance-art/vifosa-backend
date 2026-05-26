@@ -8,9 +8,9 @@ import type { MainStatus } from '../db/orders.model.js'
 // "Chờ xử lý" tab
 const PENDING_STATUSES: MainStatus[] = ['pending_store', 'awaiting_payment', 'awaiting_store_open']
 // "Đang làm" tab
-const ACTIVE_STATUSES: MainStatus[] = ['preparing', 'delivering']
+const ACTIVE_STATUSES: MainStatus[] = ['preparing', 'delivering', 'delivered']
 // "Lịch sử" tab
-const HISTORY_STATUSES: MainStatus[] = ['delivered', 'completed', 'cancelled']
+const HISTORY_STATUSES: MainStatus[] = ['completed', 'cancelled']
 
 type OrderTab = 'pending' | 'active' | 'history'
 
@@ -129,6 +129,28 @@ export async function orderRoutes(app: FastifyInstance) {
       await order.save()
 
       emitOrderStatus(order._id.toString(), 'delivering')
+      return reply.send(order)
+    }
+  )
+
+  // ── PATCH /orders/:orderId/mark-delivered ────────────────────────────────
+  // Quán xác nhận "đã trao hàng tận tay" — delivering → delivered (chờ khách xác nhận)
+  app.patch<{ Params: { orderId: string } }>(
+    '/orders/:orderId/mark-delivered',
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const order = await getOrderForStore(req.params.orderId, req.user!.userId, reply)
+      if (!order) return
+
+      if (order.mainStatus !== 'delivering') {
+        return reply.code(409).send({ error: `Đơn đang ở trạng thái "${order.mainStatus}", cần "delivering" để đánh dấu đã giao` })
+      }
+
+      order.mainStatus = 'delivered'
+      order.statusHistory.push({ status: 'delivered', at: new Date(), by: req.user!.userId })
+      await order.save()
+
+      emitOrderStatus(order._id.toString(), 'delivered')
       return reply.send(order)
     }
   )

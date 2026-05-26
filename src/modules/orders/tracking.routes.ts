@@ -80,6 +80,7 @@ export async function trackingRoutes(app: FastifyInstance) {
   )
 
   // ── POST /orders/:id/confirm-received — khách xác nhận đã nhận hàng ──────
+  // Chỉ chạy khi quán đã đánh dấu "đã giao" (delivered); khách xác nhận → completed
   app.post<{ Params: { id: string } }>(
     '/orders/:id/confirm-received',
     { preHandler: requireAuth },
@@ -87,18 +88,25 @@ export async function trackingRoutes(app: FastifyInstance) {
       const order = await _getCustomerOrder(req.params.id, req.user!.userId, reply)
       if (!order) return
 
-      const confirmableStatuses: MainStatus[] = ['preparing', 'delivering']
-      if (!confirmableStatuses.includes(order.mainStatus)) {
-        return reply.code(409).send({ error: 'Đơn hàng chưa ở trạng thái có thể xác nhận' })
+      if (order.mainStatus !== 'delivered') {
+        return reply.code(409).send({ error: 'Đơn hàng chưa được quán xác nhận giao, không thể xác nhận nhận hàng' })
       }
 
       const now = new Date()
-      order.mainStatus = 'delivered'
-      order.statusHistory.push({ status: 'delivered', at: now, by: req.user!.userId })
+      order.mainStatus = 'completed'
+      order.statusHistory.push({ status: 'completed', at: now, by: req.user!.userId })
       if (!order.completedAt) order.completedAt = now
       await order.save()
 
-      emitOrderStatus(order._id.toString(), 'delivered')
+      // Cập nhật stats của store
+      await Store.findByIdAndUpdate(order.storeId, {
+        $inc: {
+          'stats.completedOrdersThisMonth': 1,
+          'stats.totalCompletedOrders': 1,
+        },
+      })
+
+      emitOrderStatus(order._id.toString(), 'completed')
       return reply.send({ order })
     }
   )
