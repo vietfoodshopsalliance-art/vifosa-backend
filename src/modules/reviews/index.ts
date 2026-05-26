@@ -127,16 +127,27 @@ export async function reviewRoutes(app: FastifyInstance) {
       const existing = await Review.findOne({ orderId: order._id, toEntityType: 'store' })
       if (existing) return reply.code(409).send({ error: 'Đơn hàng này đã được đánh giá' })
 
-      const review = await Review.create({
-        orderId: order._id,
-        fromUserId: req.user!.userId,
-        toEntityType: 'store',
-        toEntityId: order.storeId,
-        stars: req.body.stars as 1 | 2 | 3 | 4 | 5,
-        comment: req.body.comment ?? '',
-        images: req.body.images ?? [],
-        isAnonymous: req.body.isAnonymous ?? false,
-      })
+      let review: any
+      try {
+        review = await Review.create({
+          orderId: order._id,
+          fromUserId: req.user!.userId,
+          toEntityType: 'store',
+          toEntityId: order.storeId,
+          stars: req.body.stars as 1 | 2 | 3 | 4 | 5,
+          comment: req.body.comment ?? '',
+          images: req.body.images ?? [],
+          isAnonymous: req.body.isAnonymous ?? false,
+        })
+      } catch (err: any) {
+        if (err?.code === 11000) {
+          return reply.code(409).send({ error: 'Đơn hàng này đã được đánh giá' })
+        }
+        if (err?.name === 'ValidationError') {
+          return reply.code(400).send({ error: err.message })
+        }
+        throw err
+      }
 
       const agg = await Review.aggregate([
         { $match: { toEntityId: order.storeId, toEntityType: 'store', isHiddenByAdmin: false } },
@@ -182,16 +193,27 @@ export async function reviewRoutes(app: FastifyInstance) {
       const existing = await Review.findOne({ orderId: order._id, toEntityType: 'customer' })
       if (existing) return reply.code(409).send({ error: 'Khách hàng này đã được đánh giá cho đơn này' })
 
-      const review = await Review.create({
-        orderId: order._id,
-        fromUserId: req.user!.userId,
-        toEntityType: 'customer',
-        toEntityId: order.customerId,
-        stars: req.body.stars as 1 | 2 | 3 | 4 | 5,
-        comment: req.body.comment ?? '',
-        images: req.body.images ?? [],
-        isAnonymous: req.body.isAnonymous ?? false,
-      })
+      let review: any
+      try {
+        review = await Review.create({
+          orderId: order._id,
+          fromUserId: req.user!.userId,
+          toEntityType: 'customer',
+          toEntityId: order.customerId,
+          stars: req.body.stars as 1 | 2 | 3 | 4 | 5,
+          comment: req.body.comment ?? '',
+          images: req.body.images ?? [],
+          isAnonymous: req.body.isAnonymous ?? false,
+        })
+      } catch (err: any) {
+        if (err?.code === 11000) {
+          return reply.code(409).send({ error: 'Khách hàng này đã được đánh giá cho đơn này' })
+        }
+        if (err?.name === 'ValidationError') {
+          return reply.code(400).send({ error: err.message })
+        }
+        throw err
+      }
 
       return reply.code(201).send(review)
     }
