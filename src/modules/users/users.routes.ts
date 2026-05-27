@@ -249,6 +249,18 @@ fastify.get('/me/reviews-given', { preHandler: requireAuth }, async (request, re
   return reply.send({ reviews, total, page, limit });
 });
 
+// GET /me/order-stats — thống kê đơn hàng của user
+fastify.get('/me/order-stats', { preHandler: requireAuth }, async (request, reply) => {
+  const { Order } = await import('../db/index.js');
+  const userId = (request as any).user.userId;
+  const userObjId = new mongoose.Types.ObjectId(userId);
+  const [completedCount, totalOrders] = await Promise.all([
+    Order.countDocuments({ customerId: userObjId, mainStatus: 'completed' }),
+    Order.countDocuments({ customerId: userObjId }),
+  ]);
+  return reply.send({ completedCount, totalOrders });
+});
+
 // PATCH /me/privacy — cập nhật cài đặt quyền riêng tư
 fastify.patch('/me/privacy', { preHandler: requireAuth }, async (request, reply) => {
   const User = (mongoose.models['User'] as any) || mongoose.model('User');

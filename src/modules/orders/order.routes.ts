@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify'
 import { requireAuth } from '../../middleware/auth.middleware.js'
-import { Store, Order } from '../db/index.js'
+import { Store, Order, MenuItem } from '../db/index.js'
 import { emitOrderStatus, emitPaymentStatus } from '../../socket/orderEvents.js'
 import mongoose from 'mongoose'
 import type { MainStatus } from '../db/orders.model.js'
@@ -180,6 +180,15 @@ export async function orderRoutes(app: FastifyInstance) {
           'stats.totalCompletedOrders': 1,
         },
       })
+
+      // Tăng soldCount cho từng món trong đơn
+      const soldBulk = order.items.map((oi: any) => ({
+        updateOne: {
+          filter: { _id: oi.itemId },
+          update: { $inc: { 'soldCount.allTime': oi.qty, 'soldCount.last30d': oi.qty, 'soldCount.last7d': oi.qty } },
+        },
+      }))
+      if (soldBulk.length > 0) await MenuItem.bulkWrite(soldBulk)
 
       emitOrderStatus(order._id.toString(), 'completed')
       return reply.send(order)
