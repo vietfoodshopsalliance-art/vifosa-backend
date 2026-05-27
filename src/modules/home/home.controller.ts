@@ -277,8 +277,17 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
   const hasMore = nearbyStores.length > PAGE_SIZE;
   const nearbyPage = nearbyStores.slice(0, PAGE_SIZE);
 
-  // Lấy món ăn từ nearbyPage stores
-  const nearbyItems = await buildNearbyItems(nearbyPage);
+  // Gộp tất cả store group để build items — tránh bỏ sót quán mới/trending
+  const seenIds = new Set<string>();
+  const allStoreDocs = [
+    ...newStores, ...trendingStores, ...recentPurchases, ...favorites, ...nearbyPage,
+  ].filter((s) => {
+    const sid = String(s._id);
+    if (seenIds.has(sid)) return false;
+    seenIds.add(sid);
+    return true;
+  });
+  const nearbyItems = await buildNearbyItems(allStoreDocs);
 
   const payload = {
     newStores:       newStores.map(s => toStoreCard(s)),
