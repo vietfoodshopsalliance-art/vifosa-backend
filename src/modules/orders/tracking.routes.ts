@@ -85,7 +85,7 @@ export async function trackingRoutes(app: FastifyInstance) {
   )
 
   // ── POST /orders/:id/confirm-received — khách xác nhận đã nhận hàng ──────
-  // Chỉ chạy khi quán đã đánh dấu "đã giao" (delivered); khách xác nhận → completed
+  // Cho phép từ khi quán nhận đơn (preparing) trở đi — không bắt buộc phải delivered
   app.post<{ Params: { id: string } }>(
     '/orders/:id/confirm-received',
     { preHandler: requireAuth },
@@ -93,8 +93,9 @@ export async function trackingRoutes(app: FastifyInstance) {
       const order = await _getCustomerOrder(req.params.id, req.user!.userId, reply)
       if (!order) return
 
-      if (order.mainStatus !== 'delivered') {
-        return reply.code(409).send({ error: 'Đơn hàng chưa được quán xác nhận giao, không thể xác nhận nhận hàng' })
+      const allowedStatuses: MainStatus[] = ['preparing', 'delivering', 'delivered']
+      if (!allowedStatuses.includes(order.mainStatus)) {
+        return reply.code(409).send({ error: 'Quán chưa nhận đơn, không thể xác nhận nhận hàng' })
       }
 
       const now = new Date()
