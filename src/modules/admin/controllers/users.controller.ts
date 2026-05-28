@@ -3,6 +3,7 @@ import { User as UserModel } from '../../db/users.model.js'
 import { adminResetPassword as doResetPassword } from '../../auth/auth.service.js'
 import { RefreshToken } from '../../db/refresh-tokens.model.js'
 import { AuditLog } from '../../db/misc.model.js'
+import { Store } from '../../db/index.js'
 
 const ALLOWED_GRANTABLE_ROLES = ['mod', 'admin', 'store_owner'] as const
 
@@ -200,6 +201,19 @@ export async function updateVipTier(req: FastifyRequest, reply: FastifyReply) {
     { $set: { vipTier: tier } },
     { new: true },
   ).select('-passwordHash -fcmTokens')
+
+  // Đồng bộ vipTier xuống tất cả store của user này
+  if (tier === 'none') {
+    await Store.updateMany(
+      { ownerId: userId, isDeleted: { $ne: true } },
+      { $set: { vipTier: 'none' }, $unset: { vipExpiresAt: 1 } },
+    )
+  } else {
+    await Store.updateMany(
+      { ownerId: userId, isDeleted: { $ne: true } },
+      { $set: { vipTier: tier, vipExpiresAt: new Date('2099-12-31T23:59:59Z') } },
+    )
+  }
 
   await AuditLog.create({
     actorId: (req as any).user.userId,
