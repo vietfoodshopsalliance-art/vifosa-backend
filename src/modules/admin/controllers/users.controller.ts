@@ -182,6 +182,40 @@ export async function deleteUser(req: FastifyRequest, reply: FastifyReply) {
   return reply.send({ success: true })
 }
 
+// PATCH /admin/users/:userId/vip-tier
+export async function updateVipTier(req: FastifyRequest, reply: FastifyReply) {
+  const { userId } = req.params as any
+  const { tier } = req.body as any
+
+  const VALID_TIERS = ['none', 'vip', 'vvip', 'vvvip']
+  if (!VALID_TIERS.includes(tier)) {
+    return reply.code(400).send({ error: 'VALIDATION_ERROR', message: `tier phải là một trong: ${VALID_TIERS.join(', ')}` })
+  }
+
+  const existing = await UserModel.findById(userId).select('vipTier').lean()
+  if (!existing) return reply.code(404).send({ error: 'USER_NOT_FOUND', message: 'User không tồn tại' })
+
+  const user = await UserModel.findByIdAndUpdate(
+    userId,
+    { $set: { vipTier: tier } },
+    { new: true },
+  ).select('-passwordHash -fcmTokens')
+
+  await AuditLog.create({
+    actorId: (req as any).user.userId,
+    actorRole: 'admin',
+    action: 'user.vip_tier_update',
+    targetType: 'user',
+    targetId: userId,
+    before: { vipTier: existing.vipTier },
+    after: { vipTier: tier },
+    ip: req.ip,
+    userAgent: req.headers['user-agent'] ?? '',
+  })
+
+  return reply.send({ success: true, user })
+}
+
 // GET /admin/users/:userId/audit-log
 export async function getUserAuditLog(req: FastifyRequest, reply: FastifyReply) {
   const { userId } = req.params as any

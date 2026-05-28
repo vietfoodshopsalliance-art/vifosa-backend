@@ -33,6 +33,7 @@ import { guestOrderRoutes } from './modules/orders/guest-order.routes.js';
 import { publicTrackRoutes } from './modules/orders/public-track.routes.js';
 import { supportRoutes } from './modules/support/support.routes.js'
 import { storeMembershipRoutes } from './modules/stores/store-membership.routes.js';
+import { vipRoutes } from './modules/vip/vip.routes.js';
 import { initCronJobs } from './jobs/index.js';
 import { seedIndexes } from './utils/seedIndexes.js';
 
@@ -77,6 +78,7 @@ app.register(guestOrderRoutes,        { prefix: '' });
 app.register(publicTrackRoutes,       { prefix: '' });
 app.register(supportRoutes,            { prefix: '' })
 app.register(storeMembershipRoutes,   { prefix: '' })
+app.register(vipRoutes,               { prefix: '' })
 
 const PORT = Number(process.env.PORT ?? 8080);
 

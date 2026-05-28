@@ -22,7 +22,8 @@ export async function adminRoutes(app: FastifyInstance) {
   app.post('/admin/users/:userId/reset-password', { preHandler: requireRole(['admin']) }, userCtrl.resetPassword)
   app.post('/admin/users/:userId/logout-all',     { preHandler: requireRole(['admin']) }, userCtrl.adminLogoutAll)
   app.delete('/admin/users/:userId',              { preHandler: requireRole(['admin']) }, userCtrl.deleteUser)
-  app.get('/admin/users/:userId/audit-log',       { preHandler: requireRole(['admin', 'mod']) }, userCtrl.getUserAuditLog)
+  app.patch('/admin/users/:userId/vip-tier',       { preHandler: requireRole(['admin']) }, userCtrl.updateVipTier)
+  app.get('/admin/users/:userId/audit-log',        { preHandler: requireRole(['admin', 'mod']) }, userCtrl.getUserAuditLog)
 
   // ─── Stores ───────────────────────────────────────────────────────────────
   app.get('/admin/stores',           { preHandler: requireRole(['admin', 'mod']) }, storeCtrl.listStores)

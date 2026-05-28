@@ -46,6 +46,12 @@ export type { IRefreshToken } from './refresh-tokens.model.js'
 export { StoreMembership } from './store-memberships.model.js'
 export type { IStoreMembership, MemberRole, MemberStatus, ManagerPermission } from './store-memberships.model.js'
 
+export { VipPlan } from './vip-plans.model.js'
+export type { IVipPlan, VipTier } from './vip-plans.model.js'
+
+export { VipSubscription } from './vip-subscriptions.model.js'
+export type { IVipSubscription, VipSubscriptionStatus } from './vip-subscriptions.model.js'
+
 // ─── connectDB ────────────────────────────────────────────────────────────────
 
 import mongoose from 'mongoose'

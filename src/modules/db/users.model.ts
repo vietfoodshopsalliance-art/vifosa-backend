@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Model } from 'mongoose'
 
 export type UserRole = 'customer' | 'store_owner' | 'mod' | 'admin' | 'shipper'
+export type VipTier = 'none' | 'vip' | 'vvip' | 'vvvip'
 
 export interface AuthPayload {
   userId: string
@@ -39,6 +40,7 @@ export interface IUser extends Document {
   }
   fcmTokens: string[]
   exp: number
+  vipTier: VipTier
   tosAcceptedAt: Date | null
   tosVersion: string | null
   tosAcceptedIp: string | null
@@ -168,6 +170,11 @@ const UserSchema = new Schema<IUser>(
       default: 0,
       min: 0,
     },
+    vipTier: {
+      type: String,
+      enum: ['none', 'vip', 'vvip', 'vvvip'],
+      default: 'none',
+    },
     tosAcceptedAt: {
       type: Date,
       default: null,
@@ -190,6 +197,7 @@ const UserSchema = new Schema<IUser>(
 // Indexes (username/email/phone đã có unique:true trong field definition)
 UserSchema.index({ roles: 1 })
 UserSchema.index({ isActive: 1 })
+UserSchema.index({ vipTier: 1 })
 
 // Validation hooks
 UserSchema.pre('save', async function () {
