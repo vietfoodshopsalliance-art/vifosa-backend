@@ -386,6 +386,18 @@ fastify.get('/me/stores/:storeId/customers/:customerId/reviews', { preHandler: r
   return reply.send({ reviews, total, page, limit });
 });
 
+// POST /me/ad-reward — cộng 1 EXP sau khi user xem rewarded ad thành công
+fastify.post('/me/ad-reward', { preHandler: requireAuth }, async (request, reply) => {
+  const User = (mongoose.models['User'] as any) || mongoose.model('User');
+  const userId = (request as any).user.userId;
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { $inc: { exp: 1 } },
+    { new: true }
+  ).select('exp');
+  return reply.send({ exp: updated.exp });
+});
+
 // POST /tos/accept
 fastify.post('/tos/accept', { preHandler: requireAuth }, async (request, reply) => {
   const User = (mongoose.models['User'] as any) || mongoose.model('User');

@@ -38,6 +38,7 @@ export interface IUser extends Document {
     showFavorites: boolean
   }
   fcmTokens: string[]
+  exp: number
   tosAcceptedAt: Date | null
   tosVersion: string | null
   tosAcceptedIp: string | null
@@ -161,6 +162,11 @@ const UserSchema = new Schema<IUser>(
     fcmTokens: {
       type: [String],
       default: [],
+    },
+    exp: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     tosAcceptedAt: {
       type: Date,
