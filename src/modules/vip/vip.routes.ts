@@ -2,9 +2,10 @@
 import { FastifyInstance } from 'fastify'
 import mongoose from 'mongoose'
 import { requireAuth } from '../../middleware/auth.middleware.js'
-import { Store, User } from '../db/index.js'
+import { Store, User, Order } from '../db/index.js'
 import { VipPlan } from '../db/vip-plans.model.js'
 import { VipSubscription } from '../db/vip-subscriptions.model.js'
+import { emitPaymentStatus } from '../../socket/orderEvents.js'
 
 // sePayOrderCode: VFVIP + 10 ký tự hex ngẫu nhiên → dễ nhận dạng trong nội dung CK
 function genOrderCode(): string {
@@ -203,6 +204,92 @@ export async function vipRoutes(app: FastifyInstance) {
 
       req.log.info({ orderCode, storeId: sub.storeId, tier: sub.tier }, '[sepay] subscription activated')
       return reply.send({ success: true, activated: true, orderCode })
+    }
+  )
+
+  // ── POST /webhook/sepay/order ─────────────────────────────────────────────
+  // Nhận webhook Sepay cho đơn hàng của quán VIP — tự động xác nhận thanh toán
+  app.post<{ Body: Record<string, any> }>(
+    '/webhook/sepay/order',
+    async (req, reply) => {
+      // Verify token (cùng SEPAY_WEBHOOK_TOKEN)
+      const token = process.env.SEPAY_WEBHOOK_TOKEN
+      if (token) {
+        const authHeader = req.headers['authorization'] ?? ''
+        const incoming = Array.isArray(authHeader) ? authHeader[0] : authHeader
+        if (incoming !== `Apikey ${token}`) {
+          return reply.code(401).send({ error: 'Unauthorized' })
+        }
+      }
+
+      const body = req.body ?? {}
+      req.log.info({ sePayOrderWebhook: body }, '[sepay/order] webhook received')
+
+      // Chỉ xử lý tiền vào
+      if (body.transferType !== 'in') {
+        return reply.send({ success: true, skipped: 'not_in' })
+      }
+
+      const accountNumber: string = (body.accountNumber ?? '').toString().trim()
+      const content: string       = (body.content ?? body.description ?? '').toString()
+      const amount: number        = Number(body.transferAmount ?? 0)
+
+      if (!accountNumber) {
+        return reply.send({ success: true, skipped: 'no_account' })
+      }
+
+      // Tìm quán VIP có số TK khớp
+      const store = await Store.findOne({
+        'bankAccount.number': accountNumber,
+        vipTier: { $ne: 'none' },
+        isDeleted: { $ne: true },
+      })
+
+      if (!store) {
+        req.log.info({ accountNumber }, '[sepay/order] không tìm thấy quán VIP')
+        return reply.send({ success: true, skipped: 'store_not_found' })
+      }
+
+      // Extract order.code từ content — format AB251107-456
+      const codeMatch = content.match(/[A-Z]{2}\d{6}-\d{3}/i)
+      if (!codeMatch) {
+        req.log.warn({ content, storeId: store._id }, '[sepay/order] không tìm thấy mã đơn trong content')
+        return reply.send({ success: true, skipped: 'no_order_code' })
+      }
+      const orderCode = codeMatch[0].toUpperCase()
+
+      // Tìm đơn hàng
+      const order = await Order.findOne({
+        code: orderCode,
+        storeId: store._id,
+        paymentStatus: { $nin: ['paid_full', 'cod_collected'] },
+      })
+
+      if (!order) {
+        req.log.warn({ orderCode, storeId: store._id }, '[sepay/order] không tìm thấy đơn hoặc đã thanh toán')
+        return reply.send({ success: true, skipped: 'order_not_found' })
+      }
+
+      // Kiểm tra số tiền — fifty_fifty chỉ cần nửa trước
+      const required = order.paymentMethod === 'fifty_fifty'
+        ? Math.ceil(order.totalAmount / 2)
+        : order.totalAmount
+
+      if (amount < required - 1000) {
+        req.log.warn({ orderCode, amount, required }, '[sepay/order] số tiền không đủ')
+        return reply.send({ success: true, skipped: 'insufficient_amount' })
+      }
+
+      // Cập nhật trạng thái thanh toán
+      order.paymentStatus = 'paid_full'
+      order.paidAmount    = amount
+      await order.save()
+
+      // Notify realtime
+      emitPaymentStatus(order._id.toString(), 'paid_full')
+
+      req.log.info({ orderCode, storeId: store._id, amount }, '[sepay/order] payment confirmed')
+      return reply.send({ success: true, confirmed: true, orderCode })
     }
   )
 }

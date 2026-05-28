@@ -27,9 +27,14 @@ export async function trackingRoutes(app: FastifyInstance) {
         return reply.code(403).send({ error: 'Bạn không có quyền xem đơn hàng này' })
       }
 
-      const storeDoc = await Store.findById(order.storeId).select('name address phone').lean()
+      const storeDoc = await Store.findById(order.storeId).select('name address phone vipTier').lean()
       const storeDetails = storeDoc
-        ? { name: storeDoc.name, addressText: storeDoc.address?.text ?? '', phone: (storeDoc as any).phone ?? '' }
+        ? {
+            name: storeDoc.name,
+            addressText: storeDoc.address?.text ?? '',
+            phone: (storeDoc as any).phone ?? '',
+            vipTier: (storeDoc as any).vipTier ?? 'none',
+          }
         : null
 
       return reply.send({ order, storeDetails })
