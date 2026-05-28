@@ -251,12 +251,17 @@ export async function vipRoutes(app: FastifyInstance) {
       }
 
       // Extract order.code từ content — format AB251107-456
-      const codeMatch = content.match(/[A-Z]{2}\d{6}-\d{3}/i)
+      // Dấu gạch ngang có thể bị ngân hàng bỏ khi chuyển liên ngân hàng → dùng -?
+      const codeMatch = content.match(/[A-Z]{2}\d{6}-?\d{3}/i)
       if (!codeMatch) {
         req.log.warn({ content, storeId: store._id }, '[sepay/order] không tìm thấy mã đơn trong content')
         return reply.send({ success: true, skipped: 'no_order_code' })
       }
-      const orderCode = codeMatch[0].toUpperCase()
+      // Chuẩn hoá về format có dấu gạch ngang: QG260528257 → QG260528-257
+      const rawCode = codeMatch[0].toUpperCase()
+      const orderCode = rawCode.length === 11
+        ? rawCode                                           // đã có dấu -
+        : rawCode.slice(0, 8) + '-' + rawCode.slice(8)     // chèn - vào vị trí đúng
 
       // Tìm đơn hàng
       const order = await Order.findOne({
