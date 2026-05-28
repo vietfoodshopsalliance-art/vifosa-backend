@@ -235,6 +235,7 @@ export async function guestOrderRoutes(app: FastifyInstance) {
         trackingToken:    order.trackingToken,
         storeName:        store.name,
         storeBankSnapshot: order.storeBankSnapshot,
+        storeVipTier:     (store.vipTier as string) ?? 'none',
         totalAmount:      order.totalAmount,
         itemsTotal:       order.itemsTotal,
         shipFee:          order.shipFee,

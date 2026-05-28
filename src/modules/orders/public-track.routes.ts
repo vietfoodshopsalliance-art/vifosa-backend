@@ -49,7 +49,7 @@ export async function publicTrackRoutes(app: FastifyInstance) {
     }
 
     // ── Lấy tên quán ─────────────────────────────────────────────────────────
-    const storeDoc = await Store.findById(order.storeId).select('name').lean()
+    const storeDoc = await Store.findById(order.storeId).select('name vipTier').lean()
 
     const guestStatus = STATUS_MAP[order.mainStatus] ?? 'pending'
 
@@ -59,6 +59,7 @@ export async function publicTrackRoutes(app: FastifyInstance) {
         status:           guestStatus,
         mainStatus:       order.mainStatus,
         storeName:        storeDoc?.name ?? '',
+        storeVipTier:     (storeDoc as any)?.vipTier ?? 'none',
         deliveryAddress:  order.deliveryAddress?.text ?? '',
         items: order.items.map((i) => ({
           name:     i.nameSnapshot,
@@ -69,9 +70,35 @@ export async function publicTrackRoutes(app: FastifyInstance) {
         shipFee:          order.shipFee,
         paymentMethod:    order.paymentMethod,
         paymentStatus:    order.paymentStatus,
+        bankTransferReceiptUrl: order.bankTransferReceiptUrl ?? null,
         storeBankSnapshot: order.storeBankSnapshot,
         createdAt:        order.createdAt,
       },
     })
+  })
+
+  // ── POST /track/upload-receipt — khách vãng lai upload biên lai ───────────
+  app.post<{
+    Querystring: { code?: string; t?: string }
+    Body: { receiptUrl?: string }
+  }>('/track/upload-receipt', async (req, reply) => {
+    const { code, t: token } = req.query
+    if (!code?.trim() || !token?.trim()) {
+      return reply.code(400).send({ error: 'Cần code và token' })
+    }
+
+    const order = await Order.findOne({ code: code.trim().toUpperCase() })
+    if (!order) return reply.code(404).send({ error: 'Không tìm thấy đơn hàng' })
+    if (order.trackingToken !== token.trim()) {
+      return reply.code(403).send({ error: 'Token không hợp lệ' })
+    }
+
+    const url = req.body?.receiptUrl?.trim()
+    if (!url) return reply.code(400).send({ error: 'receiptUrl là bắt buộc' })
+
+    order.bankTransferReceiptUrl = url
+    await order.save()
+
+    return reply.send({ success: true })
   })
 }
