@@ -259,9 +259,9 @@ export async function vipRoutes(app: FastifyInstance) {
       }
       // Chuẩn hoá về format có dấu gạch ngang: QG260528257 → QG260528-257
       const rawCode = codeMatch[0].toUpperCase()
-      const orderCode = rawCode.length === 11
-        ? rawCode                                           // đã có dấu -
-        : rawCode.slice(0, 8) + '-' + rawCode.slice(8)     // chèn - vào vị trí đúng
+      const orderCode = rawCode.includes('-')
+        ? rawCode                                           // đã có dấu - → giữ nguyên
+        : rawCode.slice(0, 8) + '-' + rawCode.slice(8)     // ngân hàng bỏ dấu - → chèn lại
 
       // Tìm đơn hàng
       const order = await Order.findOne({
