@@ -1,9 +1,10 @@
 import { FastifyInstance } from 'fastify'
 import mongoose from 'mongoose'
 import { requireAuth } from '../../middleware/auth.middleware.js'
-import { Order, Store, MenuItem } from '../db/index.js'
+import { Order, Store, MenuItem, User } from '../db/index.js'
 import type { MainStatus } from '../db/orders.model.js'
 import { emitOrderStatus, emitOrderUpdated } from '../../socket/orderEvents.js'
+import { PushSender } from '../../adapters/push-sender/fcm.adapter.js'
 
 export async function trackingRoutes(app: FastifyInstance) {
   // ── GET /orders/:id — khách xem chi tiết đơn ─────────────────────────────
@@ -147,6 +148,7 @@ export async function trackingRoutes(app: FastifyInstance) {
       await order.save()
 
       emitOrderUpdated(order.storeId.toString(), { type: 'reported_paid', orderId: order._id.toString() })
+      _pushPaymentToStore(order.storeId.toString(), order.code, order._id.toString())
 
       return reply.send({ order })
     }
@@ -171,6 +173,7 @@ export async function trackingRoutes(app: FastifyInstance) {
       await order.save()
 
       emitOrderUpdated(order.storeId.toString(), { type: 'reported_paid', orderId: order._id.toString() })
+      _pushPaymentToStore(order.storeId.toString(), order.code, order._id.toString())
 
       return reply.send({ order })
     }
@@ -191,4 +194,20 @@ async function _getCustomerOrder(orderId: string, userId: string, reply: any) {
     return null
   }
   return order
+}
+
+function _pushPaymentToStore(storeId: string, orderCode: string, orderId: string) {
+  Store.findById(storeId).select('ownerId').lean().then((store: any) => {
+    if (!store?.ownerId) return
+    User.findById(store.ownerId).select('fcmTokens').lean().then((owner: any) => {
+      const tokens: string[] = owner?.fcmTokens ?? []
+      if (tokens.length) {
+        PushSender.send(tokens, {
+          title: '💳 Khách báo đã chuyển khoản',
+          body: `Đơn ${orderCode} — kiểm tra và xác nhận thanh toán`,
+          data: { type: 'payment_updated', storeId, orderId },
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+  }).catch(() => {})
 }
