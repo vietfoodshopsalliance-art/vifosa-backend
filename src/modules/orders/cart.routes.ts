@@ -2,9 +2,10 @@ import { FastifyInstance } from 'fastify'
 import crypto from 'crypto'
 import mongoose from 'mongoose'
 import { requireAuth } from '../../middleware/auth.middleware.js'
-import { Store, Order, MenuItem } from '../db/index.js'
+import { Store, Order, MenuItem, User } from '../db/index.js'
 import type { MainStatus } from '../db/orders.model.js'
 import { emitOrderNew } from '../../socket/orderEvents.js'
+import { PushSender } from '../../adapters/push-sender/fcm.adapter.js'
 
 // ── Haversine ─────────────────────────────────────────────────────────────────
 
@@ -227,6 +228,17 @@ export async function cartRoutes(app: FastifyInstance) {
     }
 
     emitOrderNew(order.storeId.toString(), order)
+
+    User.findById(store.ownerId).select('fcmTokens').lean().then((owner: any) => {
+      const tokens: string[] = owner?.fcmTokens ?? []
+      if (tokens.length) {
+        PushSender.send(tokens, {
+          title: 'Đơn hàng mới!',
+          body: `${order.code} · ${order.totalAmount.toLocaleString('vi-VN')}đ`,
+          data: { type: 'new_order', storeId: order.storeId.toString(), orderId: order._id.toString() },
+        }).catch(() => {})
+      }
+    }).catch(() => {})
 
     return reply.code(201).send({ order })
   })

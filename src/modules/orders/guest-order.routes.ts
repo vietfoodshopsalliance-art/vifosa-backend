@@ -1,8 +1,9 @@
 import { FastifyInstance } from 'fastify'
 import crypto from 'crypto'
 import mongoose from 'mongoose'
-import { Store, Order, MenuItem, Setting } from '../db/index.js'
+import { Store, Order, MenuItem, Setting, User } from '../db/index.js'
 import { emitOrderNew } from '../../socket/orderEvents.js'
+import { PushSender } from '../../adapters/push-sender/fcm.adapter.js'
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
@@ -227,6 +228,17 @@ export async function guestOrderRoutes(app: FastifyInstance) {
     }
 
     emitOrderNew(order.storeId.toString(), order)
+
+    User.findById(store.ownerId).select('fcmTokens').lean().then((owner: any) => {
+      const tokens: string[] = owner?.fcmTokens ?? []
+      if (tokens.length) {
+        PushSender.send(tokens, {
+          title: 'Đơn hàng mới!',
+          body: `${order.code} · ${order.totalAmount.toLocaleString('vi-VN')}đ`,
+          data: { type: 'new_order', storeId: order.storeId.toString(), orderId: order._id.toString() },
+        }).catch(() => {})
+      }
+    }).catch(() => {})
 
     const webUrl = process.env.WEB_URL ?? 'https://vifosa.vercel.app'
     const trackingLink = `${webUrl}/track/${order.code}?t=${order.trackingToken}`
