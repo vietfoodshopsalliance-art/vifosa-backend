@@ -3,7 +3,7 @@ import mongoose from 'mongoose'
 import { requireAuth } from '../../middleware/auth.middleware.js'
 import { Order, Store, MenuItem } from '../db/index.js'
 import type { MainStatus } from '../db/orders.model.js'
-import { emitOrderStatus } from '../../socket/orderEvents.js'
+import { emitOrderStatus, emitOrderUpdated } from '../../socket/orderEvents.js'
 
 export async function trackingRoutes(app: FastifyInstance) {
   // ── GET /orders/:id — khách xem chi tiết đơn ─────────────────────────────
@@ -57,6 +57,8 @@ export async function trackingRoutes(app: FastifyInstance) {
 
       order.bankTransferReceiptUrl = url
       await order.save()
+
+      emitOrderUpdated(order.storeId.toString(), { type: 'receipt_uploaded', orderId: order._id.toString() })
 
       return reply.send({ order })
     }
@@ -143,6 +145,32 @@ export async function trackingRoutes(app: FastifyInstance) {
 
       order.paymentStatus = 'reported_paid'
       await order.save()
+
+      emitOrderUpdated(order.storeId.toString(), { type: 'reported_paid', orderId: order._id.toString() })
+
+      return reply.send({ order })
+    }
+  )
+
+  // ── POST /orders/:id/confirm-payment — alias for report-paid (mobile compat) ─
+  app.post<{ Params: { id: string } }>(
+    '/orders/:id/confirm-payment',
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const order = await _getCustomerOrder(req.params.id, req.user!.userId, reply)
+      if (!order) return
+
+      if (!['bank_transfer', 'fifty_fifty'].includes(order.paymentMethod)) {
+        return reply.code(400).send({ error: 'Phương thức thanh toán không hỗ trợ' })
+      }
+      if (order.paymentStatus !== 'unpaid') {
+        return reply.code(409).send({ error: 'Đơn đã có trạng thái thanh toán khác' })
+      }
+
+      order.paymentStatus = 'reported_paid'
+      await order.save()
+
+      emitOrderUpdated(order.storeId.toString(), { type: 'reported_paid', orderId: order._id.toString() })
 
       return reply.send({ order })
     }

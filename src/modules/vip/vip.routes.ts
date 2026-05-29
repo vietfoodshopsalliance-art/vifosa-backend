@@ -5,7 +5,7 @@ import { requireAuth } from '../../middleware/auth.middleware.js'
 import { Store, User, Order } from '../db/index.js'
 import { VipPlan } from '../db/vip-plans.model.js'
 import { VipSubscription } from '../db/vip-subscriptions.model.js'
-import { emitPaymentStatus } from '../../socket/orderEvents.js'
+import { emitPaymentStatus, emitOrderUpdated } from '../../socket/orderEvents.js'
 
 // sePayOrderCode: VFVIP + 10 ký tự hex ngẫu nhiên → dễ nhận dạng trong nội dung CK
 function genOrderCode(): string {
@@ -292,6 +292,7 @@ export async function vipRoutes(app: FastifyInstance) {
 
       // Notify realtime
       emitPaymentStatus(order._id.toString(), 'paid_full')
+      emitOrderUpdated(store._id.toString(), { type: 'payment_reconciled', orderId: order._id.toString() })
 
       req.log.info({ orderCode, storeId: store._id, amount }, '[sepay/order] payment confirmed')
       return reply.send({ success: true, confirmed: true, orderCode })
