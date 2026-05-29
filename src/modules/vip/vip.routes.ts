@@ -6,6 +6,7 @@ import { Store, User, Order } from '../db/index.js'
 import { VipPlan } from '../db/vip-plans.model.js'
 import { VipSubscription } from '../db/vip-subscriptions.model.js'
 import { emitPaymentStatus, emitOrderUpdated } from '../../socket/orderEvents.js'
+import { PushSender } from '../../adapters/push-sender/fcm.adapter.js'
 
 // sePayOrderCode: VFVIP + 10 ký tự hex ngẫu nhiên → dễ nhận dạng trong nội dung CK
 function genOrderCode(): string {
@@ -293,6 +294,20 @@ export async function vipRoutes(app: FastifyInstance) {
       // Notify realtime
       emitPaymentStatus(order._id.toString(), 'paid_full')
       emitOrderUpdated(store._id.toString(), { type: 'payment_reconciled', orderId: order._id.toString() })
+
+      // FCM fallback — để quán VIP nghe chuông DING kể cả khi không trong socket room
+      User.findById(store.ownerId).select('fcmTokens').lean().then((owner: any) => {
+        const tokens: string[] = owner?.fcmTokens ?? []
+        if (tokens.length) {
+          PushSender.send(tokens, {
+            title: '💳 Đã nhận thanh toán',
+            body: `Đơn ${orderCode} — đã đối soát tự động`,
+            data: { type: 'payment_updated', storeId: store._id.toString(), orderId: order._id.toString() },
+            channelId: 'payment_v1',
+            sound: 'ding',
+          }).catch(() => {})
+        }
+      }).catch(() => {})
 
       req.log.info({ orderCode, storeId: store._id, amount }, '[sepay/order] payment confirmed')
       return reply.send({ success: true, confirmed: true, orderCode })

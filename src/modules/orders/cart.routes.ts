@@ -236,6 +236,8 @@ export async function cartRoutes(app: FastifyInstance) {
           title: 'Đơn hàng mới!',
           body: `${order.code} · ${order.totalAmount.toLocaleString('vi-VN')}đ`,
           data: { type: 'new_order', storeId: order.storeId.toString(), orderId: order._id.toString() },
+          channelId: 'new_order_v1',
+          sound: 'chuong',
         }).catch(() => {})
       }
     }).catch(() => {})

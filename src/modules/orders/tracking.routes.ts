@@ -206,6 +206,8 @@ function _pushPaymentToStore(storeId: string, orderCode: string, orderId: string
           title: '💳 Khách báo đã chuyển khoản',
           body: `Đơn ${orderCode} — kiểm tra và xác nhận thanh toán`,
           data: { type: 'payment_updated', storeId, orderId },
+          channelId: 'payment_v1',
+          sound: 'ding',
         }).catch(() => {})
       }
     }).catch(() => {})

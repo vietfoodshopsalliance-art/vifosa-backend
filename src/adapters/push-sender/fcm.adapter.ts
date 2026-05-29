@@ -5,6 +5,10 @@ export interface PushPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
+  // Android: chọn NotificationChannel (đã tạo native với custom sound) để chuông
+  // tuỳ chỉnh kêu khi màn hình tắt / app chạy nền. sound = tên file trong res/raw.
+  channelId?: string;
+  sound?: string;
 }
 
 export interface PushResult {
@@ -28,7 +32,8 @@ export const PushSender = {
       android: {
         priority: 'high',
         notification: {
-          sound: 'default',
+          sound: payload.sound ?? 'default',
+          channelId: payload.channelId,
           clickAction: 'FLUTTER_NOTIFICATION_CLICK',
         },
       },
