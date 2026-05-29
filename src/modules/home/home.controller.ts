@@ -524,15 +524,24 @@ export async function homeFeedHandler(req: FastifyRequest, reply: FastifyReply) 
 
   const ts = (s: any) => soldMap.get(String(s._id)) ?? 0;
 
+  const distOf = (s: any): number | undefined => {
+    if (!hasGeo) return undefined;
+    const coords = s.address?.location?.coordinates;
+    if (Array.isArray(coords) && coords.length === 2) {
+      return haversineMeters(lat!, lng!, coords[1] as number, coords[0] as number);
+    }
+    return undefined;
+  };
+
   const payload = {
     newStoreItems,
     topSellingItems,
     topReviewedStoreItems,
     personalItems,
-    newStores:       newStores.map(s => toStoreCard(s, undefined, ts(s))),
-    trendingStores:  trendingStores.map(s => toStoreCard(s, undefined, ts(s))),
-    recentPurchases: recentPurchases.map(s => toStoreCard(s, undefined, ts(s))),
-    favorites:       favorites.map(s => toStoreCard(s, undefined, ts(s))),
+    newStores:       newStores.map(s => toStoreCard(s, distOf(s), ts(s))),
+    trendingStores:  trendingStores.map(s => toStoreCard(s, distOf(s), ts(s))),
+    recentPurchases: recentPurchases.map(s => toStoreCard(s, distOf(s), ts(s))),
+    favorites:       favorites.map(s => toStoreCard(s, distOf(s), ts(s))),
     nearbyStores:    nearbyPage.map(s => toStoreCard(s, (s as any).distanceMeters, ts(s))),
     nearbyItems,
     nextCursor:      hasMore ? PAGE_SIZE : null,
