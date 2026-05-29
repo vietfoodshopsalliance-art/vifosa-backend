@@ -4,6 +4,7 @@ import mongoose from 'mongoose'
 import { requireAuth } from '../../middleware/auth.middleware.js'
 import { Store, Order, MenuItem } from '../db/index.js'
 import type { MainStatus } from '../db/orders.model.js'
+import { emitOrderNew } from '../../socket/orderEvents.js'
 
 // ── Haversine ─────────────────────────────────────────────────────────────────
 
@@ -224,6 +225,8 @@ export async function cartRoutes(app: FastifyInstance) {
       // Lỗi validation từ schema (vd: totalAmount mismatch, distanceKm > 25)
       return reply.code(400).send({ error: err.message ?? 'Lỗi tạo đơn hàng' })
     }
+
+    emitOrderNew(order.storeId.toString(), order)
 
     return reply.code(201).send({ order })
   })
