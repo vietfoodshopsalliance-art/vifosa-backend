@@ -91,7 +91,7 @@ export async function storesRoutes(app: FastifyInstance) {
 
       const allowed = [
         'name', 'description', 'phone',
-        'coverImage', 'avatarImage',
+        'coverImage', 'coverImages', 'avatarImage',
         'address', 'openingHours', 'bankAccount', 'paymentMethods',
         'shipFeeFormula', 'autoConfirmMinutes', 'autoCancelMinutes',
       ]

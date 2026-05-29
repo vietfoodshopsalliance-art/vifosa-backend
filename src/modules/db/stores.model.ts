@@ -6,6 +6,7 @@ export interface IStore extends Document {
   description: string
   phone?: string
   coverImage: string | null
+  coverImages: string[]
   avatarImage: string | null
   address: {
     text: string
@@ -117,6 +118,7 @@ const StoreSchema = new Schema<IStore>(
       maxlength: [20, 'SĐT tối đa 20 ký tự'],
     },
     coverImage: { type: String, default: null },
+    coverImages: { type: [String], default: [] },
     avatarImage: { type: String, default: null },
     address: {
       type: new Schema(
