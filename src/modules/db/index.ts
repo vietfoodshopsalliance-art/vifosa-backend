@@ -13,6 +13,9 @@ export type { IStore } from './stores.model.js'
 export { MenuCategory, MenuItem } from './menu.model.js'
 export type { IMenuCategory, IMenuItem } from './menu.model.js'
 
+export { SkuCounter, nextSku } from './sku-counters.model.js'
+export type { ISkuCounter } from './sku-counters.model.js'
+
 export { Order } from './orders.model.js'
 export type {
   IOrder,

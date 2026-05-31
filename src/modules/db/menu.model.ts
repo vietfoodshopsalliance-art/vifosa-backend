@@ -44,12 +44,16 @@ export const MenuCategory: Model<IMenuCategory> =
 
 export interface IMenuItem extends Document {
   storeId: mongoose.Types.ObjectId
+  ownerId: mongoose.Types.ObjectId | null // chủ quán — scope cho SKU & nhóm đồng bộ
   categoryId: mongoose.Types.ObjectId | null
   name: string
   description: string
   price: number
   images: string[]
   stock: number | null // null = không quản lý tồn kho
+  sku: string | null // mã '001'..'999' theo chủ quán; null = món thường (không đồng bộ)
+  syncGroupId: mongoose.Types.ObjectId | null // khoá nhóm đồng bộ; cùng group = cùng món across stores
+  isSynced: boolean // true = thuộc nhóm đồng bộ toàn hệ thống
   status: 'active' | 'closed' | 'paused'
   soldCount: {
     allTime: number
@@ -68,6 +72,11 @@ const MenuItemSchema = new Schema<IMenuItem>(
       type: Schema.Types.ObjectId,
       ref: 'Store',
       required: [true, 'storeId là bắt buộc'],
+    },
+    ownerId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
     categoryId: {
       type: Schema.Types.ObjectId,
@@ -104,6 +113,20 @@ const MenuItemSchema = new Schema<IMenuItem>(
       default: null,
       min: [0, 'Tồn kho không được âm'],
     },
+    sku: {
+      type: String,
+      default: null,
+      trim: true,
+      match: [/^\d{3}$/, 'SKU phải gồm 3 chữ số (001..999)'],
+    },
+    syncGroupId: {
+      type: Schema.Types.ObjectId,
+      default: null,
+    },
+    isSynced: {
+      type: Boolean,
+      default: false,
+    },
     status: {
       type: String,
       enum: ['active', 'closed', 'paused'],
@@ -138,9 +161,15 @@ MenuItemSchema.index({ storeId: 1, status: 1 })
 MenuItemSchema.index({ storeId: 1, categoryId: 1 })
 MenuItemSchema.index({ storeId: 1, isDeleted: 1 })
 MenuItemSchema.index({ 'soldCount.last30d': -1 })
+MenuItemSchema.index({ ownerId: 1, syncGroupId: 1 })
+MenuItemSchema.index({ ownerId: 1, sku: 1 })
 
 // Hook: tự động ẩn món khi tồn kho về 0
 MenuItemSchema.pre('save', async function () {
+  // Món đồng bộ bắt buộc quản lý tồn kho (không được bán vô hạn)
+  if (this.isSynced && (this.stock === null || this.stock === undefined)) {
+    this.stock = 0
+  }
   if (this.stock !== null && this.stock === 0 && this.status === 'active') {
     this.status = 'paused'
   }
