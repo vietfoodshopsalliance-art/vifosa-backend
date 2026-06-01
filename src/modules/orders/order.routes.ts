@@ -1,9 +1,31 @@
 import { FastifyInstance } from 'fastify'
+import crypto from 'crypto'
 import { requireAuth } from '../../middleware/auth.middleware.js'
 import { Store, Order, MenuItem } from '../db/index.js'
 import { emitOrderStatus, emitPaymentStatus } from '../../socket/orderEvents.js'
 import mongoose from 'mongoose'
 import type { MainStatus } from '../db/orders.model.js'
+
+function _haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2))
+}
+
+function _genCode(): string {
+  const alpha = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  const l1 = alpha[Math.floor(Math.random() * alpha.length)]
+  const l2 = alpha[Math.floor(Math.random() * alpha.length)]
+  const now = new Date()
+  const yy = String(now.getFullYear()).slice(-2)
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  const seq = String(Math.floor(Math.random() * 1000)).padStart(3, '0')
+  return `${l1}${l2}${yy}${mm}${dd}-${seq}`
+}
 
 // "Chờ xử lý" tab
 const PENDING_STATUSES: MainStatus[] = ['pending_store', 'awaiting_payment', 'awaiting_store_open']
@@ -242,6 +264,159 @@ export async function orderRoutes(app: FastifyInstance) {
 
       emitOrderStatus(order._id.toString(), 'pending_store')
       return reply.send(order)
+    }
+  )
+
+  // ── POST /me/stores/:storeId/orders/manual — Chủ quán tạo đơn thủ công ────
+  // Dành cho: khách vãng lai, đặt qua SĐT, Facebook, Grab, Shopee ngoài app
+  app.post<{ Params: { storeId: string }; Body: any }>(
+    '/me/stores/:storeId/orders/manual',
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      if (!mongoose.isValidObjectId(req.params.storeId)) {
+        return reply.code(400).send({ error: 'storeId không hợp lệ' })
+      }
+      const store = await Store.findOne({ _id: req.params.storeId, isDeleted: { $ne: true } })
+      if (!store) return reply.code(404).send({ error: 'Không tìm thấy quán' })
+      if (store.ownerId.toString() !== req.user!.userId) {
+        return reply.code(403).send({ error: 'Bạn không phải chủ quán này' })
+      }
+
+      const body = req.body as Record<string, any>
+
+      if (!Array.isArray(body.items) || body.items.length === 0) {
+        return reply.code(400).send({ error: 'Đơn hàng cần ít nhất 1 món' })
+      }
+
+      const paymentMethod: string = body.paymentMethod ?? 'bank_transfer'
+      if (!['bank_transfer', 'cod', 'collect_later'].includes(paymentMethod)) {
+        return reply.code(400).send({ error: 'Phương thức thanh toán không hợp lệ' })
+      }
+
+      const deliveryMethod: string = body.deliveryMethod ?? 'self_pickup'
+      if (!['store_delivery', 'self_pickup'].includes(deliveryMethod)) {
+        return reply.code(400).send({ error: 'deliveryMethod không hợp lệ' })
+      }
+
+      // ── Fetch & validate items ──────────────────────────────────────────────
+      const itemIds = (body.items as any[])
+        .map((i: any) => i.itemId)
+        .filter((id: any) => mongoose.isValidObjectId(id))
+
+      const menuItems = await MenuItem.find({
+        _id: { $in: itemIds },
+        storeId: req.params.storeId,
+        isDeleted: { $ne: true },
+      })
+      const menuMap = new Map(menuItems.map((m) => [m._id.toString(), m]))
+
+      const orderItems: { itemId: mongoose.Types.ObjectId; nameSnapshot: string; priceSnapshot: number; qty: number; note: string }[] = []
+      let itemsTotal = 0
+
+      for (const i of body.items as any[]) {
+        const menu = menuMap.get(i.itemId?.toString())
+        if (!menu) return reply.code(400).send({ error: 'Món không tồn tại hoặc không thuộc quán này' })
+        const qty = Math.max(1, parseInt(String(i.qty ?? i.quantity ?? 1)))
+        orderItems.push({
+          itemId: menu._id as mongoose.Types.ObjectId,
+          nameSnapshot: menu.name,
+          priceSnapshot: menu.price,
+          qty,
+          note: (i.note ?? '').toString().trim(),
+        })
+        itemsTotal += menu.price * qty
+      }
+
+      // ── Delivery address & ship fee ─────────────────────────────────────────
+      const isSelfPickup = deliveryMethod === 'self_pickup'
+      const storeCoords = store.address?.location?.coordinates as [number, number] | undefined
+      const storeLng = storeCoords?.[0] ?? 0
+      const storeLat = storeCoords?.[1] ?? 0
+
+      let deliveryText: string
+      let deliveryLng = storeLng
+      let deliveryLat = storeLat
+
+      if (isSelfPickup) {
+        deliveryText = store.address?.text || 'Đến lấy tại quán'
+      } else {
+        deliveryText = (body.deliveryAddress?.text ?? '').toString().trim()
+        if (!deliveryText) return reply.code(400).send({ error: 'Cần địa chỉ giao hàng' })
+        const clientCoords = body.deliveryAddress?.location?.coordinates
+        if (Array.isArray(clientCoords) && clientCoords.length >= 2) {
+          deliveryLng = Number(clientCoords[0])
+          deliveryLat = Number(clientCoords[1])
+        }
+      }
+
+      const distanceKm = isSelfPickup ? 0 : _haversineKm(storeLat, storeLng, deliveryLat, deliveryLng)
+
+      let shipFee = 0
+      if (!isSelfPickup) {
+        const manualFee = parseFloat(String(body.shipFee ?? 0))
+        shipFee = isNaN(manualFee) ? 0 : Math.max(0, Math.round(manualFee / 1000) * 1000)
+      }
+
+      // ── Bank snapshot (chỉ cần cho bank_transfer) ───────────────────────────
+      const storeBankSnapshot = store.bankAccount?.number
+        ? { number: store.bankAccount.number, bank: store.bankAccount.bank ?? '', holder: store.bankAccount.holder ?? '' }
+        : null
+
+      // ── GuestInfo — tên/SĐT của khách (tùy chọn, có placeholder nếu không điền) ─
+      const guestName = body.guestInfo?.name?.toString().trim() || 'Khách vãng lai'
+      const rawPhone = body.guestInfo?.phone?.toString().trim() || ''
+      const guestPhone = /^0[0-9]{9}$/.test(rawPhone) ? rawPhone : '0000000000'
+      const guestInfo = { name: guestName, phone: guestPhone }
+
+      const paymentStatus = paymentMethod === 'cod' ? 'cod_pending' : 'unpaid'
+
+      // ── Ngày nhận hàng ─────────────────────────────────────────────────────
+      let desiredDeliveryAt: Date | null = null
+      if (body.desiredDeliveryAt) {
+        const parsed = new Date(body.desiredDeliveryAt)
+        if (!isNaN(parsed.getTime())) desiredDeliveryAt = parsed
+      }
+
+      // ── Tạo đơn ────────────────────────────────────────────────────────────
+      let code = _genCode()
+      while (await Order.exists({ code })) { code = _genCode() }
+      const trackingToken = crypto.randomBytes(16).toString('hex')
+
+      const order = new Order({
+        code,
+        trackingToken,
+        customerId: null,
+        guestInfo,
+        storeId: store._id,
+        receiver: { name: guestName, phone: guestPhone, isSelfReceiver: isSelfPickup },
+        items: orderItems,
+        itemsTotal,
+        shipFee,
+        shipFeeFormulaSnapshot: { a: 0, b: 0, c: 0, distanceKm },
+        totalAmount: itemsTotal + shipFee,
+        paymentMethod,
+        storeBankSnapshot: paymentMethod === 'bank_transfer' ? storeBankSnapshot : null,
+        paymentStatus,
+        deliveryMethod,
+        deliveryAddress: {
+          text: deliveryText,
+          location: { type: 'Point', coordinates: [deliveryLng, deliveryLat] },
+        },
+        distanceKm,
+        customerNote: (body.customerNote ?? '').toString().trim(),
+        mainStatus: 'pending_store',
+        isPreOrder: false,
+        desiredDeliveryAt,
+        statusHistory: [{ status: 'pending_store', at: new Date(), by: req.user!.userId }],
+      })
+
+      try {
+        await order.save()
+      } catch (err: any) {
+        return reply.code(400).send({ error: err.message ?? 'Lỗi tạo đơn hàng' })
+      }
+
+      return reply.code(201).send({ order })
     }
   )
 

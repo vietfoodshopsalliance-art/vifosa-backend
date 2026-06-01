@@ -82,12 +82,14 @@ app.register(vipRoutes,               { prefix: '' })
 
 const PORT = Number(process.env.PORT ?? 8080);
 
-// Dev-only routes cho smoke test — PHẢI register TRƯỚC listen()
+// Cron trigger — luôn register (cần cho production Render cron job)
+const { cronTriggerRoute } = await import('./modules/admin/cronTriggerRoute.js');
+app.register(cronTriggerRoute, { prefix: '/admin/cron' });
+
+// Dev-only routes cho smoke test
 if (process.env.NODE_ENV !== 'production') {
-  const { cronTriggerRoute } = await import('./modules/admin/cronTriggerRoute.js');
-  const { testSeedRoute }    = await import('./modules/admin/testSeedRoute.js');
-  app.register(cronTriggerRoute, { prefix: '/admin/cron' });
-app.register(testSeedRoute,    { prefix: '/admin/test' });
+  const { testSeedRoute } = await import('./modules/admin/testSeedRoute.js');
+  app.register(testSeedRoute, { prefix: '/admin/test' });
 }
 
 await app.listen({ port: PORT, host: '0.0.0.0' });

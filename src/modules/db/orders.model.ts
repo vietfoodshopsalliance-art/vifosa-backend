@@ -24,7 +24,7 @@ export type PaymentStatus =
 
 export type RefundStatus = 'required' | 'submitted' | 'refunded' | 'disputed'
 
-export type PaymentMethod = 'bank_transfer' | 'cod' | 'fifty_fifty'
+export type PaymentMethod = 'bank_transfer' | 'cod' | 'fifty_fifty' | 'collect_later'
 
 export type DeliveryMethod = 'store_delivery' | 'self_pickup' | 'customer_shipper'
 
@@ -115,6 +115,7 @@ export interface IOrder extends Document {
     by: string
   }[]
   completedAt: Date | null
+  desiredDeliveryAt: Date | null
   _reviewNotifsSent: string[]
   createdAt: Date
   updatedAt: Date
@@ -229,7 +230,7 @@ const OrderSchema = new Schema<IOrder>(
     totalAmount: { type: Number, required: true, min: 0 },
     paymentMethod: {
       type: String,
-      enum: ['bank_transfer', 'cod', 'fifty_fifty'],
+      enum: ['bank_transfer', 'cod', 'fifty_fifty', 'collect_later'],
       required: [true, 'Phương thức thanh toán là bắt buộc'],
     },
     storeBankSnapshot: {
@@ -360,6 +361,7 @@ const OrderSchema = new Schema<IOrder>(
       default: [],
     },
     completedAt: { type: Date, default: null },
+    desiredDeliveryAt: { type: Date, default: null },
     _reviewNotifsSent: { type: [String], default: [] },
   },
   {
